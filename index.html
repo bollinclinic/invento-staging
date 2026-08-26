@@ -5961,6 +5961,8 @@ async function api(payload){
   if(a==='changePassword'){ await sbChangePassword(payload.oldPassword, payload.newPassword); return {ok:true}; }
 
   if(a==='getAll'){
+    const { data: userData } = await sb.auth.getUser();
+    if(!userData || !userData.user) throw new Error('NOT_SIGNED_IN');
     const [itemsRes, txRes, reqRes, alertRes, impRes, dispRes, storesRes, gasRes, setRes,
            profRes, sampRes] = await Promise.all([
       sb.rpc('get_items'),
@@ -5972,7 +5974,7 @@ async function api(payload){
       sb.from('stores').select('*'),
       sb.from('gas_checks').select('*').order('ts',{ascending:false}).limit(180),
       sb.from('settings').select('*'),
-      sb.from('profiles').select('id,username,display_name,role').eq('id',(await sb.auth.getUser()).data.user.id).single(),
+      sb.from('profiles').select('id,username,display_name,role').eq('id',userData.user.id).single(),
       sb.from('specimens').select('*, sample_collections(*)').order('created_at',{ascending:false})
     ]);
     [itemsRes,txRes,reqRes,alertRes,impRes,dispRes,storesRes,gasRes,setRes,profRes,sampRes].forEach(r=>{
@@ -6535,8 +6537,19 @@ async function loadAll(){
     toast('Synced');
   }catch(err){
     $('#scanEcho').textContent = '';
-    toast('Could not reach the server: '+err.message);
     console.error('loadAll failed:', err);
+    if(err.message==='NOT_SIGNED_IN'){
+      // A cached app-level session existed but Supabase has no matching live session for
+      // it (e.g. stale localStorage from a different sign-in on this browser/origin) --
+      // recover the same way an expired-token sign-out does, instead of leaving the app
+      // stuck on a permanent error toast.
+      session = null; myName = '';
+      try{ localStorage.removeItem('bollin_session'); }catch(e){}
+      paintName();
+      showLogin('Please sign in to continue');
+      return;
+    }
+    toast('Could not reach the server: '+err.message);
     // Even on a partial/failed sync, nav must still reflect the role we already know from
     // login — otherwise it's stuck showing the pre-login (everything hidden) state, which
     // looks exactly like a permissions bug even for a superadmin.
@@ -6706,8 +6719,27 @@ loadPrefs();
 applyPrefs();
 applyNavPerms();
 render();                          // instant paint
-if(LIVE && !session) showLogin();  // must sign in before data loads
-else loadAll();
+async function bootAuth(){
+  if(!LIVE){ loadAll(); return; }
+  if(!session){ showLogin(); return; }
+  // The old system's login also wrote to localStorage under this app's origin, so a
+  // browser that only ever used the old system can have a cached bollin_session that
+  // parses fine but was never actually signed into THIS Supabase project (this is what
+  // hit the clinic computers on the domain cutover: skipped straight to loadAll() with
+  // no real session, then crashed on the null response). Never trust the cached object
+  // alone -- confirm Supabase itself has a live session first.
+  let liveSession = null;
+  try{ liveSession = (await sb.auth.getSession()).data.session; }catch(e){}
+  if(!liveSession){
+    session = null; myName = '';
+    try{ localStorage.removeItem('bollin_session'); }catch(e){}
+    paintName();
+    showLogin('Please sign in to continue');
+    return;
+  }
+  loadAll();
+}
+bootAuth();
 </script>
 </body>
 </html>
