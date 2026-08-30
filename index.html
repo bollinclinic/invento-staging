@@ -756,6 +756,35 @@
   </div>
 </dialog>
 
+<dialog id="addUserDlg">
+  <div class="m-head">Add user</div>
+  <div class="m-body">
+    <div class="m-row"><label for="auUsername">Username *</label><input id="auUsername" type="text" autocapitalize="none" placeholder="e.g. jsmith"></div>
+    <div class="m-row"><label for="auDisplayName">Display name</label><input id="auDisplayName" type="text" placeholder="e.g. Jane Smith"></div>
+    <div class="m-row"><label for="auRole">Role</label>
+      <select id="auRole"><option value="common">common</option><option value="staff">staff</option><option value="admin">admin</option><option value="superadmin">superadmin</option></select></div>
+    <div class="sub" style="margin:0">A default password is assigned automatically — you'll see it once the account is created, to pass on to the new user.</div>
+  </div>
+  <div class="m-actions">
+    <button class="btn" onclick="addUserDlg.close()">Cancel</button>
+    <button class="btn primary" id="auSaveBtn" onclick="saveAddUser()">Create user</button>
+  </div>
+</dialog>
+
+<dialog id="bulkEditDlg">
+  <div class="m-head">Bulk edit — <span id="beCount">0</span> item(s)</div>
+  <div class="m-body">
+    <div class="sub" style="margin:0 0 12px">Leave a field blank to leave it unchanged. Only category, location and supplier can be bulk-edited — name, code, quantity and expiry still need editing one at a time.</div>
+    <div class="m-row"><label for="beCat">Category</label><input id="beCat" type="text" placeholder="Leave blank to skip"></div>
+    <div class="m-row"><label for="beLoc">Location</label><input id="beLoc" type="text" placeholder="Leave blank to skip"></div>
+    <div class="m-row"><label for="beSupplier">Supplier</label><input id="beSupplier" type="text" placeholder="Leave blank to skip"></div>
+  </div>
+  <div class="m-actions">
+    <button class="btn" onclick="bulkEditDlg.close()">Cancel</button>
+    <button class="btn primary" onclick="saveBulkEdit()">Save changes</button>
+  </div>
+</dialog>
+
 <div id="loginWrap" style="display:none">
   <div class="logincard">
     <img src="logo.png" alt="Bollin Clinic Stock Manager">
@@ -1084,8 +1113,9 @@ function itemEditableCell(it, i, field, displayHtml, inputType){
 function tableFor(items, opts={}){
   const showExp = opts.expiry!==false;
   const superEdit = !!opts.superEdit && session && session.role==='superadmin';
+  const bulkSelect = !!opts.bulkSelect && isSuperadmin();
   const head = `<thead><tr>
-      <th>Item</th><th>Code</th><th>Category</th><th>Location</th>
+      ${bulkSelect?'<th></th>':''}<th>Item</th><th>Code</th><th>Category</th><th>Location</th>
       ${showExp?'<th>Expiry</th>':''}<th class="qty">Qty</th><th>Status</th><th></th></tr></thead>`;
   const rows = items.map(it=>{
     const s = statusOf(it);
@@ -1102,6 +1132,7 @@ function tableFor(items, opts={}){
     const qtyDisplay = it.tracker==='instruments' ? '—' : (it.qty+' '+it.unit);
     const qtyCell = (superEdit && it.tracker!=='instruments') ? itemEditableCell(it,i,'qty', qtyDisplay, 'number') : qtyDisplay;
     return `<tr class="${hasRem?'hasrem':''}">
+      ${bulkSelect?`<td data-label=""><input type="checkbox" ${selTrack.has(i)?'checked':''} onchange="toggleSel(selTrack,${i})" style="width:18px;height:18px"></td>`:''}
       <td data-label="">${nameCell}${remChip}</td>
       <td class="code" data-label="Code">${codeCell}</td>
       <td data-label="Category">${catCell}</td>
@@ -1114,10 +1145,12 @@ function tableFor(items, opts={}){
         ${can('obsolete')&&it.tracker!=='instruments'?`<button onclick='markObsolete(${i})' title="Move to obsolete stock" style="color:var(--ink-soft)">Obsolete</button>`:''}</td>
     </tr>`;
   }).join('');
-  return `<table>${head}<tbody>${rows||'<tr><td colspan="8" style="color:var(--ink-soft)">Nothing matches.</td></tr>'}</tbody></table>`;
+  return `<table>${head}<tbody>${rows||`<tr><td colspan="${bulkSelect?9:8}" style="color:var(--ink-soft)">Nothing matches.</td></tr>`}</tbody></table>`;
 }
 
+let _selTrackKey = null;
 function trackerView(key){
+  if(_selTrackKey!==key){ selTrack.clear(); _selTrackKey = key; }
   const all = state.items.filter(i=>i.tracker===key && !i.obsolete);
   const stores = [...new Set(all.map(i=>i.loc).filter(Boolean))].sort();
   const cats   = [...new Set(all.map(i=>i.cat).filter(Boolean))].sort();
@@ -1127,6 +1160,9 @@ function trackerView(key){
       (!q || i.name.toLowerCase().includes(q) || (i.code||'').toLowerCase().includes(q)) &&
       (!st || i.loc===st) && (!ct || i.cat===ct))
     .sort((a,b)=>a.name.localeCompare(b.name));
+  const bulk = isSuperadmin();
+  const shownIxs = items.map(i=>state.items.indexOf(i));
+  const allTicked = shownIxs.length && shownIxs.every(ix=>selTrack.has(ix));
   return `
     <h1>${TRACKER_LABEL[key]}</h1>
     <div class="sub">${all.length} items · scan any barcode, or use Move</div>
@@ -1144,7 +1180,18 @@ function trackerView(key){
       ${can('add')?`<button class="btn" onclick="openAdd('')">＋ Add item</button>`:''}
     </div>
     ${session && session.role==='superadmin' ? '<div class="sub">Double-click name, code, category, location, expiry or qty to correct it directly.</div>' : ''}
-    <div id="tblWrap">${tableFor(items,{expiry: key!=='garments', superEdit:true})}</div>`;
+    ${bulk ? `
+    <div class="toolrow" style="background:var(--mist);border-radius:10px;padding:10px 12px">
+      <label style="display:flex;gap:8px;align-items:center;font-size:14px">
+        <input type="checkbox" ${allTicked?'checked':''} onchange="selAllTrack('${key}',this.checked)" style="width:18px;height:18px">
+        Tick all shown (${items.length})
+      </label>
+      <span style="color:var(--ink-soft);font-size:13px">${selTrack.size} selected</span>
+      <button class="btn" ${selTrack.size?'':'disabled'} onclick="openBulkEdit('${key}')">Bulk edit</button>
+      <button class="btn" ${selTrack.size?'':'disabled'} onclick="bulkGenerateBarcodes('${key}')">Generate new barcodes</button>
+      <button class="btn" ${selTrack.size?'':'disabled'} style="color:var(--red)" onclick="bulkObsolete('${key}')">Make obsolete</button>
+    </div>` : ''}
+    <div id="tblWrap">${tableFor(items,{expiry: key!=='garments', superEdit:true, bulkSelect:true})}</div>`;
 }
 function refreshTrackerTable(){
   const wrap = document.getElementById('tblWrap');
@@ -1156,7 +1203,76 @@ function refreshTrackerTable(){
       (!q || i.name.toLowerCase().includes(q) || (i.code||'').toLowerCase().includes(q)) &&
       (!st || i.loc===st) && (!ct || i.cat===ct))
     .sort((a,b)=>a.name.localeCompare(b.name));
-  wrap.innerHTML = tableFor(items,{expiry: key!=='garments', superEdit:true});
+  wrap.innerHTML = tableFor(items,{expiry: key!=='garments', superEdit:true, bulkSelect:true});
+}
+function selAllTrack(key, on){
+  selTrack.clear();
+  if(on){
+    const q  = (window._q ||'').toLowerCase();
+    const st = window._store||'', ct = window._cat||'';
+    state.items.forEach((it,ix)=>{
+      if(it.tracker===key && !it.obsolete &&
+        (!q || it.name.toLowerCase().includes(q) || (it.code||'').toLowerCase().includes(q)) &&
+        (!st || it.loc===st) && (!ct || it.cat===ct)) selTrack.add(ix);
+    });
+  }
+  render();
+}
+let _bulkEditKey = null;
+function openBulkEdit(key){
+  if(!isSuperadmin() || !selTrack.size) return;
+  _bulkEditKey = key;
+  ['beCat','beLoc','beSupplier'].forEach(id=>$('#'+id).value='');
+  $('#beCount').textContent = selTrack.size;
+  bulkEditDlg.showModal();
+}
+async function saveBulkEdit(){
+  const cat = $('#beCat').value.trim(), loc = $('#beLoc').value.trim(), sup = $('#beSupplier').value.trim();
+  if(!cat && !loc && !sup){ toast('Enter at least one field to change'); return; }
+  const items = [...selTrack].map(ix=>state.items[ix]).filter(it=>it && it.tracker===_bulkEditKey);
+  const rows = items.filter(it=>it._row).map(it=>it._row);
+  if(!rows.length){ toast('Nothing selected'); return; }
+  const fields = {};
+  if(cat) fields.Category = cat;
+  if(loc) fields.Location = loc;
+  if(sup) fields.Supplier = sup;
+  items.forEach(it=>{ if(cat) it.cat=cat; if(loc) it.loc=loc; if(sup) it.supplier=sup; });
+  bulkEditDlg.close(); selTrack.clear(); render();
+  toast(items.length+' item(s) updated');
+  if(LIVE){
+    try{ await api({action:'itemBulkUpdate', rows, fields}); loadAll(); }
+    catch(err){ toast('Not saved — '+err.message); loadAll(); }
+  }
+}
+async function bulkObsolete(key){
+  if(!isSuperadmin() || !selTrack.size) return;
+  const items = [...selTrack].map(ix=>state.items[ix]).filter(it=>it && it.tracker===key);
+  if(!items.length) return;
+  if(!confirm('Move '+items.length+' item(s) to obsolete stock? They will disappear from all lists and alerts, but stay saved and can be restored anytime.')) return;
+  const rows = items.filter(it=>it._row).map(it=>it._row);
+  items.forEach(it=>{ it.obsolete=true; it.obsBy=myName||''; it.obsAt=new Date().toISOString(); });
+  selTrack.clear(); render();
+  toast(items.length+' item(s) moved to obsolete');
+  if(LIVE){
+    try{ await api({action:'itemBulkObsolete', rows}); loadAll(); }
+    catch(err){ toast('Not saved — '+err.message); loadAll(); }
+  }
+}
+async function bulkGenerateBarcodes(key){
+  if(!isSuperadmin() || !selTrack.size) return;
+  const items = [...selTrack].map(ix=>state.items[ix]).filter(it=>it && it.tracker===key && it._row);
+  if(!items.length){ toast('Nothing selected'); return; }
+  if(!confirm('Generate new barcodes for '+items.length+' item(s)? Their current barcodes will be replaced with new, unused ones.')) return;
+  const rows = items.map(it=>it._row);
+  if(!LIVE){ toast('Demo mode — cannot generate live barcodes'); return; }
+  try{
+    const res = await api({action:'itemBulkGenerateBarcodes', rows});
+    const map = res.barcodes||{};
+    items.forEach(it=>{ if(map[it._row]) it.barcode = map[it._row]; });
+    selTrack.clear(); render();
+    toast(items.length+' barcode(s) generated');
+    loadAll();
+  }catch(err){ toast('Not saved — '+err.message); }
 }
 
 function dashboardView(){
@@ -1538,6 +1654,7 @@ state.dispatch = state.dispatch || (CONFIG.SUPABASE_URL ? [] : [
 ]);
 let sterTab = 'use';
 const selDsp = new Set(), selRcv = new Set();
+const selTrack = new Set();   // bulk-select for the tracker pages (superadmin-only bulk edit/obsolete/barcode-gen)
 
 const DSTATUS = {
   'Pending Collection': '<span class="badge b-low">Pending collection</span>',
@@ -1810,6 +1927,22 @@ function refreshSterilTable(){
 /* --- tab: on hand (instrument register + expiry) --- */
 function instDaysLeft(it){ return it.expiry ? Math.round((new Date(it.expiry)-new Date())/86400000) : null; }
 function instIsOut(code){ return state.dispatch.some(d=>(d.status==='Out'||d.status==='Partial') && d.code===code); }
+// The instrument register (state.items) has no live status of its own -- it only ever gets
+// touched back to "sterile" on receive. Whether an instrument is actually on the shelf right
+// now has to be derived from the dispatch log's most recent non-Returned entry for its code,
+// otherwise a just-logged-as-used instrument still reads as "At Bollin" (it's not — it's
+// pending collection or already at CSSD), and can look like it exists in two places at once.
+// state.dispatch is newest-first, so .find() naturally picks the latest cycle for this code.
+function instCurrentStatus(code){
+  if(code){
+    const active = state.dispatch.find(d => d.code===code && d.status!=='Returned');
+    if(active){
+      if(active.status==='Pending Collection') return {label:'Used — pending collection', cls:'b-low'};
+      if(active.status==='Out' || active.status==='Partial') return {label:'At CSSD', cls:'b-exp'};
+    }
+  }
+  return {label:'At Bollin', cls:'b-ok'};
+}
 function instExpiring(){
   return state.items.filter(i=>i.tracker==='instruments')
     .filter(i=>{ const d=instDaysLeft(i); return d!=null && d<=60; });
@@ -1842,8 +1975,8 @@ function sterilOnHandTab(){
       : d<0 ? '<span class="badge b-out">Expired '+(-d)+'d ago</span>'
       : d<=60 ? '<span class="badge b-low">'+d+'d left</span>'
       : new Date(it.expiry).toLocaleDateString('en-GB');
-    const where = instIsOut(it.code||it.barcode)
-      ? '<span class="badge b-exp">At CSSD</span>' : '<span class="badge b-ok">At Bollin</span>';
+    const cur = instCurrentStatus(it.code||it.barcode);
+    const where = `<span class="badge ${cur.cls}">${cur.label}</span>`;
     const gi = state.items.indexOf(it);
     return `<tr style="${d!=null&&d<=60?'background:#FFF7F0':''};cursor:pointer" onclick="openOnHand(${gi})"
         title="Click for details${(session&&isAdmin())?' / edit':''}">
@@ -1897,7 +2030,7 @@ function openOnHand(i){
   $('#ohExp').value  = it.expiry||'';
   ['ohName','ohCode','ohBar','ohType','ohQty','ohExp'].forEach(id=>$('#'+id).disabled = !admin);
   const d = instDaysLeft(it);
-  const where = instIsOut(it.code||it.barcode) ? 'At Countess (out for sterilisation)' : 'At Bollin';
+  const where = instCurrentStatus(it.code||it.barcode).label;
   $('#ohInfo').innerHTML = 'Where: <strong>'+where+'</strong>'+
     ' &nbsp;·&nbsp; Sterilisation cycles to date: <strong>'+(it.cycles||0)+'</strong>'+
     (d!=null ? ' &nbsp;·&nbsp; '+(d<0?('<span style="color:var(--red)">Expired '+(-d)+' day(s) ago</span>'):(d+' day(s) of sterility left')) : '');
@@ -4962,9 +5095,9 @@ function codeOut(download){
 }
 
 
-/* ---------------- users & roles (admin / superadmin) ---------------- */
+/* ---------------- users & roles (superadmin only) ---------------- */
 function usersView(){
-  if(!isAdmin()) return '<h1>Users</h1><div class="sub">Admins only.</div>';
+  if(!isSuperadmin()) return '<h1>Users</h1><div class="sub">Superadmins only.</div>';
   const supers = (state.users||[]).filter(u=>u.role==='superadmin').length;
   const rows = (state.users||[]).map((u,i)=>`<tr>
     <td data-label=""><strong>${u.name||u.username}</strong> <span class="code" style="font-family:var(--mono);font-size:12px">${u.username}</span></td>
@@ -4975,11 +5108,44 @@ function usersView(){
   return `<h1>Users &amp; roles</h1>
     <div class="sub">Appoint the <strong>super admins</strong> here (target: 3). Super admins can do everything admins can, plus the <strong>Rota</strong> and future management-only areas. Role changes apply from the user's next reload or sign-in.</div>
     <div class="sub">Current super admins: <strong>${supers}</strong> of 3</div>
+    <div class="toolrow"><button class="btn primary" onclick="openAddUser()">＋ Add user</button></div>
     <table><thead><tr><th>User</th><th>Active</th><th>Role</th></tr></thead>
     <tbody>${rows||'<tr><td colspan="3" style="color:var(--ink-soft)">No users loaded — reload the app.</td></tr>'}</tbody></table>`;
 }
+function openAddUser(){
+  if(!isSuperadmin()) return;
+  ['auUsername','auDisplayName'].forEach(id=>$('#'+id).value='');
+  $('#auRole').value = 'common';
+  addUserDlg.showModal();
+  $('#auUsername').focus();
+}
+async function saveAddUser(){
+  const username = $('#auUsername').value.trim().toLowerCase();
+  const displayName = $('#auDisplayName').value.trim();
+  const role = $('#auRole').value;
+  if(!username){ toast('Username is required'); return; }
+  if(!/^[a-z0-9._-]+$/.test(username)){ toast('Username can only contain letters, numbers, dots, hyphens and underscores'); return; }
+  const btn = $('#auSaveBtn'); btn.disabled = true; btn.textContent = 'Creating…';
+  try{
+    const { data, error } = await sb.functions.invoke('create-user', { body: { username, displayName, role } });
+    if(error){
+      let msg = error.message;
+      try{ const body = await error.context.json(); if(body && body.error) msg = body.error; }catch(e){}
+      throw new Error(msg);
+    }
+    if(data && data.error) throw new Error(data.error);
+    addUserDlg.close();
+    alert('User created.\n\nUsername: '+data.username+'\nPassword: '+data.password+'\n\nGive these to '+
+      (displayName||username)+' — they should change the password after first signing in.');
+    loadAll();
+  }catch(err){
+    toast('Could not create user — '+err.message);
+  }finally{
+    btn.disabled = false; btn.textContent = 'Create user';
+  }
+}
 async function changeUserRole(i, sel){
-  const u = (state.users||[])[i]; if(!u || !isAdmin()){ if(sel&&u) sel.value=u.role; return; }
+  const u = (state.users||[])[i]; if(!u || !isSuperadmin()){ if(sel&&u) sel.value=u.role; return; }
   const role = sel.value;
   const self = session && session.username && String(session.username).toLowerCase()===u.username.toLowerCase();
   if(!confirm('Change '+(u.name||u.username)+' to '+role.toUpperCase()+'?'+
@@ -5970,7 +6136,7 @@ async function api(payload){
       sb.from('stock_requests').select('*').order('requested_at',{ascending:false}),
       sb.from('alerts').select('*').order('ts',{ascending:false}).limit(100),
       sb.from('implants').select('*').order('created_at',{ascending:false}),
-      sb.from('dispatch_log').select('*').order('date_used',{ascending:false,nullsFirst:false}),
+      sb.from('dispatch_log').select('*').order('created_at',{ascending:false}),
       sb.from('stores').select('*'),
       sb.from('gas_checks').select('*').order('ts',{ascending:false}).limit(180),
       sb.from('settings').select('*'),
@@ -6096,6 +6262,22 @@ async function api(payload){
     const {error} = await sb.rpc('item_update', {p_item_id: payload.row, p_fields: row});
     if(error) throw new Error(error.message);
     return {ok:true};
+  }
+  if(a==='itemBulkUpdate'){
+    const row = fieldsToItemRow(payload.fields);
+    const {error} = await sb.rpc('item_bulk_update', {p_item_ids: payload.rows, p_fields: row});
+    if(error) throw new Error(error.message);
+    return {ok:true};
+  }
+  if(a==='itemBulkObsolete'){
+    const {error} = await sb.rpc('item_bulk_obsolete', {p_item_ids: payload.rows, p_by: myName||''});
+    if(error) throw new Error(error.message);
+    return {ok:true};
+  }
+  if(a==='itemBulkGenerateBarcodes'){
+    const {data, error} = await sb.rpc('item_bulk_generate_barcodes', {p_item_ids: payload.rows});
+    if(error) throw new Error(error.message);
+    return {ok:true, barcodes: data.barcodes};
   }
   if(a==='setBarcodes'){
     let done=0; const errors=[];
@@ -6565,6 +6747,7 @@ try { session = JSON.parse(localStorage.getItem('bollin_session')||'null'); } ca
 if(session) myName = session.displayName || '';
 
 function isAdmin(){ const r = session && session.role; return r==='admin' || r==='superadmin'; }
+function isSuperadmin(){ return !!(session && session.role==='superadmin'); }
 const ROLE_RANK = { common:0, staff:1, admin:2, superadmin:3 };
 function roleRank(){ return (session && ROLE_RANK[session.role]) || 0; }
 function isStaffPlus(){ return roleRank()>=1; }
@@ -6638,7 +6821,7 @@ function viewAllowed(v){
   if(v==='stickers') return can('sticker');
   if(v==='procedures') return true;   // all roles can run procedures (financials hidden inside)
   if(v==='samples') return true;   // all roles — everyone can view and advance status; creating/editing/deleting stays gated inside the view
-  if(v==='users') return isAdmin();
+  if(v==='users') return isSuperadmin();
   if(v==='rota') return !!(session && session.role==='superadmin');
   return true;
 }
