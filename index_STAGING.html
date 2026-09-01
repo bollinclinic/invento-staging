@@ -466,6 +466,7 @@
     <a href="#values" data-view="values">Stock value</a>
     <div class="navsec">Admin</div>
     <a href="#stores" data-view="stores">Stores & transfers</a>
+    <a href="#offsite" data-view="offsite">Offsite store</a>
     <a href="#obsolete" data-view="obsolete">Obsolete stock</a>
     <a href="#assets" data-view="assets">Assets</a>
     <a href="#stickers" data-view="stickers">Sticker printer</a>
@@ -850,6 +851,13 @@ const CONFIG = {
   SUPABASE_ANON_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im96bHNrd3RiZ2JsZm1xamdjcm1mIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcwNTQyNzEsImV4cCI6MjEwMjYzMDI3MX0.jTRbcxqPHoygje8zMXEZk-TaxJKv3m-y6-ZtY9wS0JA"
 };
 const TRACKER_TAB = {consumables:'Consumables',meds:'Meds',garments:'Garments',instruments:'Instruments',linen:'Linen'};
+// Stock moved offsite (limited on-site space) is deliberately invisible everywhere in the
+// active inventory -- trackers, dashboard counts, stock value, procedure scanning, stocktake
+// -- until someone manually moves it back. It only ever shows up in the dedicated Offsite
+// store tab. Applies to the 4 non-instrument trackers only; instruments stay inside the
+// sterilisation workflow, which already tracks their own location/status independently.
+const OFFSITE_STORE = 'MS Offsite Store';
+const OFFSITE_TRACKERS = ['consumables','meds','garments','linen'];
 
 /* =============================================================
    DEMO DATA — real rows sampled from the Bollin trackers so the
@@ -953,9 +961,12 @@ function handleScan(code){
   // On every other screen (Sterilisation, trackers, implants…) scanning behaves exactly as normal,
   // so an open procedure never swallows tray or stock scans done elsewhere.
   if(procActive() && currentView==='procedures'){
-    let pIdx = state.items.findIndex(it => it.barcode===code || it.code===code);
-    if(pIdx<0 && code in state.barcodeLinks) pIdx = state.barcodeLinks[code];
+    let pIdx = state.items.findIndex(it => (it.barcode===code || it.code===code) && it.loc!==OFFSITE_STORE);
+    if(pIdx<0 && code in state.barcodeLinks && state.items[state.barcodeLinks[code]] && state.items[state.barcodeLinks[code]].loc!==OFFSITE_STORE) pIdx = state.barcodeLinks[code];
     if(pIdx>=0){ procConsumeScan(state.items[pIdx]); return; }
+    if(state.items.some(it => (it.barcode===code || it.code===code) && it.loc===OFFSITE_STORE)){
+      toast('That item is at '+OFFSITE_STORE+' — bring it back to an active store first'); return;
+    }
     toast('Unknown barcode — link it first from a tracker, then scan again'); return;
   }
   // receiving an implant delivery?
@@ -968,8 +979,9 @@ function handleScan(code){
   if(idx<0 && code in state.barcodeLinks) idx = state.barcodeLinks[code];
   if(idx>=0){
     const it = state.items[idx];
-    // during a stocktake, a scan counts the item instead of moving stock
-    if(currentView==='stocktake' && it.tracker===stk.tracker &&
+    // during a stocktake, a scan counts the item instead of moving stock (offsite stock isn't
+    // physically on a shelf to count, so it never counts here even if somehow scanned)
+    if(currentView==='stocktake' && it.tracker===stk.tracker && it.loc!==OFFSITE_STORE &&
        (!stk.store || it.loc===stk.store)){ bumpCount(it); return; }
     if(it.tracker==='instruments'){ sterilScan(code); return; }
     openMove(it); return;
@@ -1151,7 +1163,7 @@ function tableFor(items, opts={}){
 let _selTrackKey = null;
 function trackerView(key){
   if(_selTrackKey!==key){ selTrack.clear(); _selTrackKey = key; }
-  const all = state.items.filter(i=>i.tracker===key && !i.obsolete);
+  const all = state.items.filter(i=>i.tracker===key && !i.obsolete && i.loc!==OFFSITE_STORE);
   const stores = [...new Set(all.map(i=>i.loc).filter(Boolean))].sort();
   const cats   = [...new Set(all.map(i=>i.cat).filter(Boolean))].sort();
   const q  = (window._q ||'').toLowerCase();
@@ -1199,7 +1211,7 @@ function refreshTrackerTable(){
   const key = currentView;
   const q  = (window._q ||'').toLowerCase();
   const st = window._store||'', ct = window._cat||'';
-  const items = state.items.filter(i => i.tracker===key && !i.obsolete &&
+  const items = state.items.filter(i => i.tracker===key && !i.obsolete && i.loc!==OFFSITE_STORE &&
       (!q || i.name.toLowerCase().includes(q) || (i.code||'').toLowerCase().includes(q)) &&
       (!st || i.loc===st) && (!ct || i.cat===ct))
     .sort((a,b)=>a.name.localeCompare(b.name));
@@ -1211,7 +1223,7 @@ function selAllTrack(key, on){
     const q  = (window._q ||'').toLowerCase();
     const st = window._store||'', ct = window._cat||'';
     state.items.forEach((it,ix)=>{
-      if(it.tracker===key && !it.obsolete &&
+      if(it.tracker===key && !it.obsolete && it.loc!==OFFSITE_STORE &&
         (!q || it.name.toLowerCase().includes(q) || (it.code||'').toLowerCase().includes(q)) &&
         (!st || it.loc===st) && (!ct || it.cat===ct)) selTrack.add(ix);
     });
@@ -1276,7 +1288,7 @@ async function bulkGenerateBarcodes(key){
 }
 
 function dashboardView(){
-  const stock = state.items.filter(i=>i.tracker!=='instruments' && !i.obsolete);
+  const stock = state.items.filter(i=>i.tracker!=='instruments' && !i.obsolete && i.loc!==OFFSITE_STORE);
   const low = stock.filter(i=>i.qty>0 && i.qty<=i.reorder);
   const out = stock.filter(i=>i.qty===0);
   const exp = stock.filter(i=>{const d=daysTo(i.expiry);return d!=null && d<=90;});
@@ -1306,8 +1318,8 @@ function dashboardView(){
 }
 
 function listView(title, filter){
-  // base list always excludes obsolete/dead stock
-  let base = state.items.filter(i=>!i.obsolete).filter(filter);
+  // base list always excludes obsolete/dead stock, and anything moved offsite
+  let base = state.items.filter(i=>!i.obsolete && i.loc!==OFFSITE_STORE).filter(filter);
   const ft = window._llTracker||'', fs = window._llStore||'', fc = window._llCat||'';
   const tracks = [...new Set(base.map(i=>i.tracker))].sort();
   const stores = [...new Set(base.filter(i=>!ft||i.tracker===ft).map(i=>i.loc).filter(Boolean))].sort();
@@ -2470,6 +2482,7 @@ function stkItems(){
   return state.items.filter(i =>
     i.tracker === stk.tracker &&
     i.tracker !== 'instruments' &&
+    i.loc !== OFFSITE_STORE &&
     (!stk.store || i.loc === stk.store));
 }
 
@@ -2496,7 +2509,7 @@ function paintStkSummary(){
 
 function stocktakeView(){
   const trackers = ['consumables','meds','garments','linen'];
-  const all = state.items.filter(i=>i.tracker===stk.tracker);
+  const all = state.items.filter(i=>i.tracker===stk.tracker && i.loc!==OFFSITE_STORE);
   const stores = [...new Set(all.map(i=>i.loc).filter(Boolean))].sort();
   const items = stkItems();
   const showCost = can('values');
@@ -3014,7 +3027,7 @@ window._vSort = 'valueDesc';
 function valuesView(){
   const trackers = ['','consumables','meds','garments','linen'];
   const tf = window._vTracker||'';
-  let items = state.items.filter(i=>i.tracker!=='instruments' && !i.obsolete &&
+  let items = state.items.filter(i=>i.tracker!=='instruments' && !i.obsolete && i.loc!==OFFSITE_STORE &&
     (!tf || i.tracker===tf));
   const q = (window._vq||'').toLowerCase();
   if(q) items = items.filter(i=>i.name.toLowerCase().includes(q) || (i.supplier||'').toLowerCase().includes(q));
@@ -3042,7 +3055,7 @@ function valuesView(){
       <td class="qty" data-label="Value"><strong>${val(i)!=null?'£'+val(i).toFixed(2):'—'}</strong></td>
     </tr>`).join('');
   return `<h1>Stock value</h1>
-    <div class="sub">Total <strong>£${total.toFixed(2)}</strong> across ${items.length} items (${costed} costed). Sort and filter to explore.</div>
+    <div class="sub">Total <strong>£${total.toFixed(2)}</strong> across ${items.length} items (${costed} costed). Sort and filter to explore. ${can('stores')?`Stock at ${OFFSITE_STORE} has its own value total on the <a href="#offsite" onclick="nav('offsite');return false">Offsite store</a> tab.`:''}</div>
     <div class="toolrow">
       <select onchange="window._vTracker=this.value;render()">
         ${trackers.map(t=>`<option value="${t}" ${t===tf?'selected':''}>${t?TRACKER_LABEL[t]:'All trackers'}</option>`).join('')}
@@ -3110,7 +3123,11 @@ function allStoresFor(tracker){
   const fromItems = state.items.filter(i=>i.tracker===tracker && !i.obsolete)
     .map(i=>i.loc).filter(Boolean);
   const managed = (state.stores||[]).filter(s=>s.tracker===tracker).map(s=>s.store);
-  return [...new Set([...fromItems, ...managed])].sort();
+  // MS Offsite Store is always a valid destination for its 4 eligible trackers, without
+  // needing to be manually added first via "+ Add store" -- otherwise there'd be no way to
+  // move the very first item there.
+  const offsite = OFFSITE_TRACKERS.includes(tracker) ? [OFFSITE_STORE] : [];
+  return [...new Set([...fromItems, ...managed, ...offsite])].sort();
 }
 function storesView(){
   const trackers = ['consumables','meds','garments','instruments','linen'];
@@ -3120,7 +3137,8 @@ function storesView(){
   const q = (window._sq||'').toLowerCase();
   const cats = [...new Set(state.items.filter(i=>i.tracker===t && !i.obsolete).map(i=>i.cat).filter(Boolean))].sort();
   const cf = window._sCat||'', sf = window._sStore||'';
-  const items = state.items.map((it,ix)=>({it,ix})).filter(x=>x.it.tracker===t && !x.it.obsolete &&
+  const storesFrom = stores.filter(s=>s!==OFFSITE_STORE);   // browsing "from" here is what Stores & transfers is for -- offsite stock has its own dedicated tab
+  const items = state.items.map((it,ix)=>({it,ix})).filter(x=>x.it.tracker===t && !x.it.obsolete && x.it.loc!==OFFSITE_STORE &&
     (!q || x.it.name.toLowerCase().includes(q) || (x.it.code||'').toLowerCase().includes(q)) &&
     (!cf || x.it.cat===cf) && (!sf || x.it.loc===sf));
   const allSel = items.length && items.every(x=>selMove.has(x.ix));
@@ -3158,7 +3176,7 @@ function storesView(){
       </select>
       <select onchange="window._sStore=this.value;render()">
         <option value="">From: all stores</option>
-        ${stores.map(x=>`<option ${x===sf?'selected':''}>${x}</option>`).join('')}
+        ${storesFrom.map(x=>`<option ${x===sf?'selected':''}>${x}</option>`).join('')}
       </select>
     </div>
     <div class="toolrow">
@@ -3181,7 +3199,7 @@ function selAllMove(on){
     const t = window._sTracker||'consumables';
     const q = (window._sq||'').toLowerCase(), cf = window._sCat||'', sf = window._sStore||'';
     state.items.forEach((it,ix)=>{
-      if(it.tracker===t && !it.obsolete &&
+      if(it.tracker===t && !it.obsolete && it.loc!==OFFSITE_STORE &&
         (!q || it.name.toLowerCase().includes(q) || (it.code||'').toLowerCase().includes(q)) &&
         (!cf || it.cat===cf) && (!sf || it.loc===sf)) selMove.add(ix);
     });
@@ -3219,6 +3237,100 @@ async function doMoveStore(){
   const rows = picked.map(i=>i._row).filter(Boolean);
   selMove.clear(); render();
   toast(picked.length+' item(s) moved to '+dest);
+  if(LIVE){
+    try{ await api({action:'moveStore', tracker:TRACKER_TAB[t], rows, toStore:dest}); }
+    catch(err){ toast('Not saved — '+err.message); loadAll(); }
+  }
+}
+
+/* ---------------- offsite store — admin only ---------------- */
+// Reuses the same location field and item_move_store RPC as Stores & transfers -- "offsite" is
+// just another store name, the only special behaviour is that every other active-inventory
+// view (trackers, dashboard, values, stocktake, procedure scanning) filters it out. Moving an
+// item here or back out is the same "change location" operation either way.
+const selOffsite = new Set();
+function offsiteTrackerCount(key){ return state.items.filter(i=>i.tracker===key && !i.obsolete && i.loc===OFFSITE_STORE).length; }
+function offsiteView(){
+  const t = OFFSITE_TRACKERS.includes(window._offTracker) ? window._offTracker : 'consumables';
+  window._offTracker = t;
+  const activeStores = allStoresFor(t).filter(s=>s!==OFFSITE_STORE);
+  const q = (window._offq||'').toLowerCase();
+  const items = state.items.map((it,ix)=>({it,ix})).filter(x=>x.it.tracker===t && !x.it.obsolete && x.it.loc===OFFSITE_STORE &&
+    (!q || x.it.name.toLowerCase().includes(q) || (x.it.code||'').toLowerCase().includes(q)));
+  const allSel = items.length && items.every(x=>selOffsite.has(x.ix));
+  const val = i => i.cost!=null ? i.cost*i.qty : null;
+
+  let grandItems = 0, grandValue = 0, grandCosted = 0;
+  OFFSITE_TRACKERS.forEach(tr=>{
+    state.items.filter(i=>i.tracker===tr && !i.obsolete && i.loc===OFFSITE_STORE).forEach(i=>{
+      grandItems++;
+      if(i.cost!=null){ grandValue += i.cost*i.qty; grandCosted++; }
+    });
+  });
+
+  const tabBtn = key => `<button onclick="window._offTracker='${key}';window._offq='';selOffsite.clear();render()"
+      style="padding:10px 16px;border:none;border-bottom:3px solid ${t===key?'var(--pine)':'transparent'};
+      background:none;font-weight:${t===key?'700':'600'};font-size:14.5px;
+      color:${t===key?'var(--pine)':'var(--ink-soft)'}">${TRACKER_LABEL[key]}
+      <span class="badge b-low" style="font-size:11px">${offsiteTrackerCount(key)}</span></button>`;
+
+  const thisVal = items.reduce((s,{it})=>s+(val(it)||0),0);
+  const rows = items.map(({it,ix})=>`<tr>
+      <td data-label=""><input type="checkbox" ${selOffsite.has(ix)?'checked':''} onchange="toggleSel(selOffsite,${ix})" style="width:18px;height:18px"></td>
+      <td data-label=""><strong>${it.name}</strong> <span class="code" style="font-family:var(--mono);font-size:11.5px">${it.code||''}</span></td>
+      <td data-label="Category">${it.cat||'—'}</td>
+      <td class="qty" data-label="Qty">${it.qty} ${it.unit}</td>
+      <td data-label="Expiry">${it.expiry?new Date(it.expiry).toLocaleDateString('en-GB'):'—'} ${expBadge(it)}</td>
+      <td class="qty" data-label="Value">${val(it)!=null?'£'+val(it).toFixed(2):'—'}</td>
+    </tr>`).join('');
+
+  return `<h1>Offsite store</h1>
+    <div class="sub">Stock relocated to <strong>${OFFSITE_STORE}</strong> due to limited on-site space. It's excluded from active-inventory counts, alerts and stock value everywhere else in the app — this is the only place it's visible until you move it back to an active store.</div>
+    <div class="note" style="background:var(--gold-soft);border-color:#E4D3A8;color:#7A5A14">
+      <strong>${grandItems} item(s) offsite</strong> across all trackers · total value <strong>£${grandValue.toFixed(2)}</strong> (${grandCosted} of ${grandItems} costed)
+    </div>
+    <div style="border-bottom:1px solid var(--line);margin-bottom:16px;display:flex;gap:4px;overflow-x:auto">
+      ${OFFSITE_TRACKERS.map(tabBtn).join('')}
+    </div>
+    <div class="sub">${items.length} item(s) here · value £${thisVal.toFixed(2)}</div>
+    <div class="toolrow">
+      <input type="search" placeholder="Search name or code…" value="${window._offq||''}" oninput="window._offq=this.value;render()">
+    </div>
+    <div class="toolrow">
+      <label style="display:flex;gap:8px;align-items:center;font-size:14px">
+        <input type="checkbox" ${allSel?'checked':''} onchange="selAllOffsite('${t}',this.checked)" style="width:18px;height:18px">
+        Tick all shown (${items.length})
+      </label>
+      <select id="offDest" style="padding:9px 10px;border:1px solid var(--line);border-radius:8px">
+        <option value="">Move back to…</option>
+        ${activeStores.map(s=>`<option>${s}</option>`).join('')}
+      </select>
+      <button class="btn primary" ${selOffsite.size?'':'disabled'} onclick="doMoveBackOffsite()">Move back ${selOffsite.size||''} ticked item(s)</button>
+    </div>
+    <table><thead><tr><th></th><th>Item</th><th>Category</th><th class="qty">Qty</th><th>Expiry</th><th class="qty">Value</th></tr></thead>
+    <tbody>${rows||`<tr><td colspan="6" style="color:var(--ink-soft)">Nothing at ${OFFSITE_STORE} for ${TRACKER_LABEL[t]}.</td></tr>`}</tbody></table>`;
+}
+function selAllOffsite(t, on){
+  selOffsite.clear();
+  if(on){
+    const q = (window._offq||'').toLowerCase();
+    state.items.forEach((it,ix)=>{
+      if(it.tracker===t && !it.obsolete && it.loc===OFFSITE_STORE &&
+        (!q || it.name.toLowerCase().includes(q) || (it.code||'').toLowerCase().includes(q))) selOffsite.add(ix);
+    });
+  }
+  render();
+}
+async function doMoveBackOffsite(){
+  const dest = $('#offDest').value;
+  if(!dest){ toast('Choose a destination store'); return; }
+  const t = OFFSITE_TRACKERS.includes(window._offTracker) ? window._offTracker : 'consumables';
+  const picked = [...selOffsite].map(ix=>state.items[ix]).filter(i=>i && i.tracker===t && i.loc===OFFSITE_STORE);
+  if(!picked.length){ toast('Tick at least one item'); return; }
+  picked.forEach(i=>i.loc=dest);
+  const rows = picked.map(i=>i._row).filter(Boolean);
+  selOffsite.clear(); render();
+  toast(picked.length+' item(s) moved back to '+dest);
   if(LIVE){
     try{ await api({action:'moveStore', tracker:TRACKER_TAB[t], rows, toStore:dest}); }
     catch(err){ toast('Not saved — '+err.message); loadAll(); }
@@ -5954,6 +6066,7 @@ function render(){
   else if(v==='values') m.innerHTML = valuesView();
   else if(v==='obsolete') m.innerHTML = obsoleteView();
   else if(v==='stores') m.innerHTML = storesView();
+  else if(v==='offsite') m.innerHTML = offsiteView();
   else if(v==='assets') m.innerHTML = assetsView();
   else if(v==='gas'){ m.innerHTML = gasView(); paintDeliv('o2'); paintDeliv('air'); }
   else if(v==='stickers') m.innerHTML = stickersView();
@@ -6817,6 +6930,7 @@ function viewAllowed(v){
   if(v==='values') return can('values');
   if(v==='obsolete') return can('obsolete');
   if(v==='stores') return can('stores');
+  if(v==='offsite') return can('stores');
   if(v==='assets') return can('assets');
   if(v==='stickers') return can('sticker');
   if(v==='procedures') return true;   // all roles can run procedures (financials hidden inside)
