@@ -3119,6 +3119,30 @@ function obsoleteView(){
 
 /* ---------------- stores & transfers — admin only ---------------- */
 const selMove = new Set();
+// How much of each ticked item to move, keyed by its index in state.items -- defaults to the
+// item's full current quantity the first time it's ticked, but editable down to any lesser
+// amount so e.g. 50 of 100 receivers can move offsite while 50 stay active. Shared between
+// Stores & transfers and the Offsite tab since both are the same underlying operation.
+const moveQty = {};
+function getMoveQty(ix){
+  const it = state.items[ix];
+  if(!it) return 1;
+  if(!(ix in moveQty)) moveQty[ix] = it.qty;
+  return Math.min(moveQty[ix], it.qty);
+}
+function setMoveQty(ix, v){
+  const it = state.items[ix];
+  if(!it) return;
+  const n = Math.max(1, Math.min(Math.floor(Number(v))||1, it.qty));
+  moveQty[ix] = n;
+}
+function moveQtyCell(ix){
+  const it = state.items[ix];
+  const q = getMoveQty(ix);
+  return `<input type="number" min="1" max="${it.qty}" value="${q}" title="Quantity to move (of ${it.qty})"
+    onclick="event.stopPropagation()" onchange="setMoveQty(${ix},this.value);render()"
+    style="width:70px;padding:6px 8px;border:1px solid var(--line);border-radius:6px;font-family:var(--mono)">`;
+}
 function allStoresFor(tracker){
   const fromItems = state.items.filter(i=>i.tracker===tracker && !i.obsolete)
     .map(i=>i.loc).filter(Boolean);
@@ -3148,6 +3172,7 @@ function storesView(){
         <span><strong>${it.name}</strong> <span class="code" style="font-family:var(--mono);font-size:11.5px">${it.code||''}</span></span></td>
       <td data-label="Category">${it.cat||'—'}</td>
       <td class="qty" data-label="Qty">${it.qty}</td>
+      <td data-label="Move qty">${selMove.has(ix)?moveQtyCell(ix):`<span style="color:var(--ink-soft)">${it.qty}</span>`}</td>
       <td data-label="Current store">${it.loc||'—'}</td></tr>`).join('');
   const storeRows = stores.map(s=>{
     const cnt = state.items.filter(i=>i.tracker===t && !i.obsolete && i.loc===s).length;
@@ -3190,8 +3215,8 @@ function storesView(){
       </select>
       <button class="btn primary" onclick="doMoveStore()">Move ${selMove.size||''} ticked item(s)</button>
     </div>
-    <table><thead><tr><th>Item</th><th>Category</th><th class="qty">Qty</th><th>Current store</th></tr></thead>
-    <tbody>${rows||'<tr><td colspan="4" style="color:var(--ink-soft)">Nothing matches.</td></tr>'}</tbody></table>`;
+    <table><thead><tr><th>Item</th><th>Category</th><th class="qty">Qty</th><th>Move qty</th><th>Current store</th></tr></thead>
+    <tbody>${rows||'<tr><td colspan="5" style="color:var(--ink-soft)">Nothing matches.</td></tr>'}</tbody></table>`;
 }
 function selAllMove(on){
   selMove.clear();
@@ -3231,15 +3256,21 @@ async function doMoveStore(){
   const dest = $('#moveDest').value;
   if(!dest){ toast('Choose a destination store'); return; }
   const t = window._sTracker||'consumables';
-  const picked = [...selMove].map(ix=>state.items[ix]).filter(i=>i && i.tracker===t);
+  const picked = [...selMove].map(ix=>({it:state.items[ix], ix})).filter(x=>x.it && x.it.tracker===t);
   if(!picked.length){ toast('Tick at least one item'); return; }
-  picked.forEach(i=>i.loc=dest);
-  const rows = picked.map(i=>i._row).filter(Boolean);
+  // each ticked item moves its own qty (defaults to all of it) -- a partial move splits the
+  // row server-side, so only apply the simple "whole row relocates" optimism when the full
+  // quantity is moving; a partial move just shows the reduced qty here until loadAll() brings
+  // in the split/merged destination row.
+  const moves = picked.map(({it,ix})=>({row:it._row, qty:Math.min(getMoveQty(ix), it.qty), it}));
+  moves.forEach(({it,qty})=>{ if(qty>=it.qty) it.loc=dest; else it.qty-=qty; });
   selMove.clear(); render();
-  toast(picked.length+' item(s) moved to '+dest);
+  toast(moves.length+' item(s) moved to '+dest);
   if(LIVE){
-    try{ await api({action:'moveStore', tracker:TRACKER_TAB[t], rows, toStore:dest}); }
-    catch(err){ toast('Not saved — '+err.message); loadAll(); }
+    try{
+      for(const m of moves){ if(m.row) await api({action:'itemMoveQty', row:m.row, qty:m.qty, toStore:dest}); }
+      loadAll();
+    }catch(err){ toast('Not saved — '+err.message); loadAll(); }
   }
 }
 
@@ -3280,6 +3311,7 @@ function offsiteView(){
       <td data-label=""><strong>${it.name}</strong> <span class="code" style="font-family:var(--mono);font-size:11.5px">${it.code||''}</span></td>
       <td data-label="Category">${it.cat||'—'}</td>
       <td class="qty" data-label="Qty">${it.qty} ${it.unit}</td>
+      <td data-label="Move qty">${selOffsite.has(ix)?moveQtyCell(ix):`<span style="color:var(--ink-soft)">${it.qty}</span>`}</td>
       <td data-label="Expiry">${it.expiry?new Date(it.expiry).toLocaleDateString('en-GB'):'—'} ${expBadge(it)}</td>
       <td class="qty" data-label="Value">${val(it)!=null?'£'+val(it).toFixed(2):'—'}</td>
     </tr>`).join('');
@@ -3307,8 +3339,8 @@ function offsiteView(){
       </select>
       <button class="btn primary" ${selOffsite.size?'':'disabled'} onclick="doMoveBackOffsite()">Move back ${selOffsite.size||''} ticked item(s)</button>
     </div>
-    <table><thead><tr><th></th><th>Item</th><th>Category</th><th class="qty">Qty</th><th>Expiry</th><th class="qty">Value</th></tr></thead>
-    <tbody>${rows||`<tr><td colspan="6" style="color:var(--ink-soft)">Nothing at ${OFFSITE_STORE} for ${TRACKER_LABEL[t]}.</td></tr>`}</tbody></table>`;
+    <table><thead><tr><th></th><th>Item</th><th>Category</th><th class="qty">Qty</th><th>Move qty</th><th>Expiry</th><th class="qty">Value</th></tr></thead>
+    <tbody>${rows||`<tr><td colspan="7" style="color:var(--ink-soft)">Nothing at ${OFFSITE_STORE} for ${TRACKER_LABEL[t]}.</td></tr>`}</tbody></table>`;
 }
 function selAllOffsite(t, on){
   selOffsite.clear();
@@ -3325,15 +3357,17 @@ async function doMoveBackOffsite(){
   const dest = $('#offDest').value;
   if(!dest){ toast('Choose a destination store'); return; }
   const t = OFFSITE_TRACKERS.includes(window._offTracker) ? window._offTracker : 'consumables';
-  const picked = [...selOffsite].map(ix=>state.items[ix]).filter(i=>i && i.tracker===t && i.loc===OFFSITE_STORE);
+  const picked = [...selOffsite].map(ix=>({it:state.items[ix], ix})).filter(x=>x.it && x.it.tracker===t && x.it.loc===OFFSITE_STORE);
   if(!picked.length){ toast('Tick at least one item'); return; }
-  picked.forEach(i=>i.loc=dest);
-  const rows = picked.map(i=>i._row).filter(Boolean);
+  const moves = picked.map(({it,ix})=>({row:it._row, qty:Math.min(getMoveQty(ix), it.qty), it}));
+  moves.forEach(({it,qty})=>{ if(qty>=it.qty) it.loc=dest; else it.qty-=qty; });
   selOffsite.clear(); render();
-  toast(picked.length+' item(s) moved back to '+dest);
+  toast(moves.length+' item(s) moved back to '+dest);
   if(LIVE){
-    try{ await api({action:'moveStore', tracker:TRACKER_TAB[t], rows, toStore:dest}); }
-    catch(err){ toast('Not saved — '+err.message); loadAll(); }
+    try{
+      for(const m of moves){ if(m.row) await api({action:'itemMoveQty', row:m.row, qty:m.qty, toStore:dest}); }
+      loadAll();
+    }catch(err){ toast('Not saved — '+err.message); loadAll(); }
   }
 }
 
@@ -6409,6 +6443,11 @@ async function api(payload){
     const {error} = await sb.rpc('item_move_store', {p_item_ids: payload.rows||[], p_location: payload.toStore});
     if(error) throw new Error(error.message);
     return {ok:true};
+  }
+  if(a==='itemMoveQty'){
+    const {data, error} = await sb.rpc('item_move_qty', {p_item_id: payload.row, p_qty: payload.qty, p_to_location: payload.toStore});
+    if(error) throw new Error(error.message);
+    return {ok:true, result:data};
   }
   if(a==='instrumentDelete'){
     const {error} = await sb.rpc('item_delete_instrument', {p_item_id: payload.row});
