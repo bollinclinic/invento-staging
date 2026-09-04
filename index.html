@@ -1711,10 +1711,24 @@ function sterilRowMatch(d,q){
 function sterilSearchRow(){
   return `<div class="toolrow" style="margin-bottom:8px">
     <input type="search" placeholder="Search name, code, batch, ref…" value="${String(window._sqSteril||'').replace(/"/g,'&quot;')}"
-      oninput="window._sqSteril=this.value;render()"
+      oninput="window._sqSteril=this.value;refreshSterilBody()"
       style="flex:1;min-width:220px;padding:10px 12px;border:1px solid var(--line);border-radius:8px">
-    ${window._sqSteril?`<button class="btn" onclick="window._sqSteril='';render()">Clear</button>`:''}
+    ${window._sqSteril?`<button class="btn" onclick="window._sqSteril='';refreshSterilBody()">Clear</button>`:''}
   </div>`;
+}
+function refreshSterilBody(){
+  if(currentView!=='instruments') return;
+  const el = document.getElementById('sterilBodyWrap');
+  if(!el) return;
+  const pending = state.dispatch.filter(d=>d.status==='Pending Collection');
+  const out = state.dispatch.filter(d=>d.status==='Out' || d.status==='Partial');
+  const tmp = document.createElement('div');
+  if(sterTab==='use') tmp.innerHTML = sterilUseTab(pending);
+  else if(sterTab==='dispatch') tmp.innerHTML = sterilDispatchTab(pending);
+  else if(sterTab==='receive') tmp.innerHTML = sterilReceiveTab(out);
+  else return;
+  const fresh = tmp.querySelector('#sterilBodyWrap');
+  if(fresh) el.innerHTML = fresh.innerHTML;
 }
 function sterilUseTab(pending){
   const _sq=String(window._sqSteril||'').toLowerCase().trim();
@@ -1733,6 +1747,7 @@ function sterilUseTab(pending){
         <button onclick="deleteUse(${ix})" style="color:var(--red)">✕</button></td>`:''}</tr>`;
   }).join('');
   return `${sterilSearchRow()}
+    <div id="sterilBodyWrap">
     <div class="toolrow">
       <input id="useCode" list="instList" type="text" placeholder="Scan barcode or type code / name…"
              style="flex:2;min-width:200px;padding:10px 12px;border:1px solid var(--line);border-radius:8px;font-family:var(--mono)">
@@ -1742,7 +1757,8 @@ function sterilUseTab(pending){
     </div>
     <div class="sub">Scanning anywhere on this tab logs the instrument instantly (count 1). Items below are waiting for the next dispatch.</div>
     <table><thead><tr><th>Instrument / Tray</th><th>Used</th><th class="qty">Qty</th><th>Status</th>${can('useedit')?'<th>Correct</th>':''}</tr></thead>
-    <tbody>${rows||`<tr><td colspan="${can('useedit')?5:4}" style="color:var(--ink-soft)">Nothing pending collection.</td></tr>`}</tbody></table>`;
+    <tbody>${rows||`<tr><td colspan="${can('useedit')?5:4}" style="color:var(--ink-soft)">Nothing pending collection.</td></tr>`}</tbody></table>
+    </div>`;
 }
 
 function openUseEdit(ix){
@@ -1809,6 +1825,7 @@ function sterilDispatchTab(pending){
       <td class="qty" data-label="Qty">${d.qtyOut}</td></tr>`;
   }).join('');
   return `${sterilSearchRow()}
+    <div id="sterilBodyWrap">
     <div class="toolrow">
       <input id="dsRef" type="text" value="${nextDispatchRef()}" title="Dispatch ref" style="width:130px;padding:9px 10px;border:1px solid var(--line);border-radius:8px;font-family:var(--mono)">
       <input id="dsDate" type="date" value="${new Date().toISOString().slice(0,10)}" style="padding:9px 10px;border:1px solid var(--line);border-radius:8px">
@@ -1824,7 +1841,8 @@ function sterilDispatchTab(pending){
       <button class="btn primary" onclick="doDispatch()">Dispatch ${selDsp.size||''} ticked item(s)</button>
     </div>
     <table><thead><tr><th>Instrument / Tray</th><th>Used</th><th class="qty">Qty</th></tr></thead>
-    <tbody>${rows||'<tr><td colspan="3" style="color:var(--ink-soft)">Nothing pending collection — log used instruments in tab 1 first.</td></tr>'}</tbody></table>`;
+    <tbody>${rows||'<tr><td colspan="3" style="color:var(--ink-soft)">Nothing pending collection — log used instruments in tab 1 first.</td></tr>'}</tbody></table>
+    </div>`;
 }
 async function doDispatch(){
   const picked = [...selDsp].map(ix=>state.dispatch[ix]).filter(d=>d && d.status==='Pending Collection');
@@ -1867,7 +1885,8 @@ function sterilReceiveTab(out){
       <td class="qty" data-label="Qty">${d.qtyOut}</td>
       <td data-label="Status">${DSTATUS[d.status]||d.status}</td></tr>`;
   }).join('');
-  return `${sterilSearchRow()}${banner}
+  return `${sterilSearchRow()}
+    <div id="sterilBodyWrap">${banner}
     <div class="toolrow">
       <label style="display:flex;gap:8px;align-items:center;font-size:14px">
         <input type="checkbox" ${allSel?'checked':''} onchange="selAll(selRcv,'Out',this.checked)" style="width:18px;height:18px">
@@ -1877,7 +1896,8 @@ function sterilReceiveTab(out){
     </div>
     <div class="sub">Tick only what physically arrived — anything left unticked stays on the awaiting list for the next delivery. Scanning a code on this tab ticks it.</div>
     <table><thead><tr><th>Instrument / Tray</th><th>Dispatch</th><th>Sent</th><th class="qty">Qty</th><th>Status</th></tr></thead>
-    <tbody>${rows||'<tr><td colspan="5" style="color:var(--ink-soft)">Nothing out at CSSD — all instruments are home.</td></tr>'}</tbody></table>`;
+    <tbody>${rows||'<tr><td colspan="5" style="color:var(--ink-soft)">Nothing out at CSSD — all instruments are home.</td></tr>'}</tbody></table>
+    </div>`;
 }
 async function doReceive(){
   const picked = [...selRcv].map(ix=>state.dispatch[ix]).filter(d=>d && (d.status==='Out'||d.status==='Partial'));
@@ -3194,7 +3214,7 @@ function storesView(){
     <div style="margin-bottom:16px;line-height:2.3">${storeRows||'<span style="color:var(--ink-soft)">No stores yet.</span>'}</div>
     <h1 style="font-size:16px">Move stock between stores</h1>
     <div class="toolrow">
-      <input type="search" placeholder="Search…" value="${window._sq||''}" oninput="window._sq=this.value;render()">
+      <input type="search" placeholder="Search…" value="${window._sq||''}" oninput="window._sq=this.value;refreshStoresMove()">
       <select onchange="window._sCat=this.value;render()">
         <option value="">All categories</option>
         ${cats.map(x=>`<option ${x===cf?'selected':''}>${x}</option>`).join('')}
@@ -3204,6 +3224,7 @@ function storesView(){
         ${storesFrom.map(x=>`<option ${x===sf?'selected':''}>${x}</option>`).join('')}
       </select>
     </div>
+    <div id="storesMoveWrap">
     <div class="toolrow">
       <label style="display:flex;gap:8px;align-items:center;font-size:14px">
         <input type="checkbox" ${allSel?'checked':''} onchange="selAllMove(this.checked)" style="width:18px;height:18px">
@@ -3216,7 +3237,17 @@ function storesView(){
       <button class="btn primary" onclick="doMoveStore()">Move ${selMove.size||''} ticked item(s)</button>
     </div>
     <table><thead><tr><th>Item</th><th>Category</th><th class="qty">Qty</th><th>Move qty</th><th>Current store</th></tr></thead>
-    <tbody>${rows||'<tr><td colspan="5" style="color:var(--ink-soft)">Nothing matches.</td></tr>'}</tbody></table>`;
+    <tbody>${rows||'<tr><td colspan="5" style="color:var(--ink-soft)">Nothing matches.</td></tr>'}</tbody></table>
+    </div>`;
+}
+function refreshStoresMove(){
+  if(currentView!=='stores') return;
+  const el = document.getElementById('storesMoveWrap');
+  if(!el) return;
+  const tmp = document.createElement('div');
+  tmp.innerHTML = storesView();
+  const fresh = tmp.querySelector('#storesMoveWrap');
+  if(fresh) el.innerHTML = fresh.innerHTML;
 }
 function selAllMove(on){
   selMove.clear();
@@ -3324,10 +3355,11 @@ function offsiteView(){
     <div style="border-bottom:1px solid var(--line);margin-bottom:16px;display:flex;gap:4px;overflow-x:auto">
       ${OFFSITE_TRACKERS.map(tabBtn).join('')}
     </div>
-    <div class="sub">${items.length} item(s) here · value £${thisVal.toFixed(2)}</div>
     <div class="toolrow">
-      <input type="search" placeholder="Search name or code…" value="${window._offq||''}" oninput="window._offq=this.value;render()">
+      <input type="search" placeholder="Search name or code…" value="${window._offq||''}" oninput="window._offq=this.value;refreshOffsite()">
     </div>
+    <div id="offsiteWrap">
+    <div class="sub">${items.length} item(s) here · value £${thisVal.toFixed(2)}</div>
     <div class="toolrow">
       <label style="display:flex;gap:8px;align-items:center;font-size:14px">
         <input type="checkbox" ${allSel?'checked':''} onchange="selAllOffsite('${t}',this.checked)" style="width:18px;height:18px">
@@ -3340,7 +3372,17 @@ function offsiteView(){
       <button class="btn primary" ${selOffsite.size?'':'disabled'} onclick="doMoveBackOffsite()">Move back ${selOffsite.size||''} ticked item(s)</button>
     </div>
     <table><thead><tr><th></th><th>Item</th><th>Category</th><th class="qty">Qty</th><th>Move qty</th><th>Expiry</th><th class="qty">Value</th></tr></thead>
-    <tbody>${rows||`<tr><td colspan="7" style="color:var(--ink-soft)">Nothing at ${OFFSITE_STORE} for ${TRACKER_LABEL[t]}.</td></tr>`}</tbody></table>`;
+    <tbody>${rows||`<tr><td colspan="7" style="color:var(--ink-soft)">Nothing at ${OFFSITE_STORE} for ${TRACKER_LABEL[t]}.</td></tr>`}</tbody></table>
+    </div>`;
+}
+function refreshOffsite(){
+  if(currentView!=='offsite') return;
+  const el = document.getElementById('offsiteWrap');
+  if(!el) return;
+  const tmp = document.createElement('div');
+  tmp.innerHTML = offsiteView();
+  const fresh = tmp.querySelector('#offsiteWrap');
+  if(fresh) el.innerHTML = fresh.innerHTML;
 }
 function selAllOffsite(t, on){
   selOffsite.clear();
@@ -3753,12 +3795,21 @@ function assetsView(){
     <div class="toolrow">
       <button class="btn primary" onclick="openAsset(null)">＋ Add asset</button>
       <input type="search" placeholder="Search name, serial or location…" value="${window._aq||''}"
-             oninput="window._aq=this.value;render()">
+             oninput="window._aq=this.value;refreshAssets()">
       <button class="btn" onclick="assetReportPDF()">Download PDF report</button>
     </div>
-    <table><thead><tr><th>Asset</th><th>Function</th><th>Location</th><th>Supplier</th>
+    <div id="assetsWrap"><table><thead><tr><th>Asset</th><th>Function</th><th>Location</th><th>Supplier</th>
       <th>Last maint.</th><th>Next due</th><th>Status</th><th></th></tr></thead>
-    <tbody>${rows||'<tr><td colspan="8" style="color:var(--ink-soft)">No assets yet — add your machines above.</td></tr>'}</tbody></table>`;
+    <tbody>${rows||'<tr><td colspan="8" style="color:var(--ink-soft)">No assets yet — add your machines above.</td></tr>'}</tbody></table></div>`;
+}
+function refreshAssets(){
+  if(currentView!=='assets') return;
+  const el = document.getElementById('assetsWrap');
+  if(!el) return;
+  const tmp = document.createElement('div');
+  tmp.innerHTML = assetsView();
+  const fresh = tmp.querySelector('#assetsWrap');
+  if(fresh) el.innerHTML = fresh.innerHTML;
 }
 
 function openAsset(ix){
@@ -5118,12 +5169,13 @@ function stkCodesTab(){
         ${locs.map(l=>`<option ${l===loc?'selected':''}>${l}</option>`).join('')}
       </select>
       <input type="search" placeholder="Search name or code…" value="${window._skQ||''}"
-             oninput="window._skQ=this.value;render()">
+             oninput="window._skQ=this.value;refreshStkCodes()">
       <select onchange="stkCodeType=this.value">
         <option value="barcode" ${stkCodeType==='barcode'?'selected':''}>Barcode</option>
         <option value="qr" ${stkCodeType==='qr'?'selected':''}>QR code</option>
       </select>
     </div>
+    <div id="stkCodesWrap">
     <div class="toolrow">
       <label style="display:flex;gap:8px;align-items:center;font-size:14px">
         <input type="checkbox" ${allSel?'checked':''} onchange="stkSelAll(this.checked)" style="width:18px;height:18px">
@@ -5133,7 +5185,17 @@ function stkCodesTab(){
       <button class="btn" onclick="downloadCodePDF()">Download PDF</button>
     </div>
     <table><thead><tr><th>Item</th><th>Code</th><th>Location</th><th>Category</th></tr></thead>
-    <tbody>${rows||'<tr><td colspan="3" style="color:var(--ink-soft)">Nothing matches.</td></tr>'}</tbody></table>`;
+    <tbody>${rows||'<tr><td colspan="3" style="color:var(--ink-soft)">Nothing matches.</td></tr>'}</tbody></table>
+    </div>`;
+}
+function refreshStkCodes(){
+  if(currentView!=='stickers' || stkMode!=='codes') return;
+  const el = document.getElementById('stkCodesWrap');
+  if(!el) return;
+  const tmp = document.createElement('div');
+  tmp.innerHTML = stkCodesTab();
+  const fresh = tmp.querySelector('#stkCodesWrap');
+  if(fresh) el.innerHTML = fresh.innerHTML;
 }
 function stkSelAll(on){
   const tr = window._skTracker||'meds', q=(window._skQ||'').toLowerCase(), cat=window._skCat||'', loc=window._skLoc||'';
@@ -5648,7 +5710,7 @@ function rotaStaffSearch(){
     <strong style="font-size:14px">Find a person's shifts</strong>
     <div class="toolrow" style="margin-top:8px">
       <input list="rotaNames" placeholder="Name — scrub, ODP, surgeon, RMO…" value="${String(sv.name||'').replace(/"/g,'&quot;')}"
-        oninput="window._rotaStaff=Object.assign(window._rotaStaff||{},{name:this.value});render()"
+        oninput="window._rotaStaff=Object.assign(window._rotaStaff||{},{name:this.value});refreshRotaStaffSearch()"
         style="flex:1;min-width:200px;padding:10px 12px;border:1px solid var(--line);border-radius:8px">
       <select onchange="window._rotaStaff=Object.assign(window._rotaStaff||{},{preset:this.value});render()"
         style="padding:10px;border:1px solid var(--line);border-radius:8px">
@@ -5661,11 +5723,20 @@ function rotaStaffSearch(){
         <input type="date" value="${sv.to||''}" onchange="window._rotaStaff=Object.assign(window._rotaStaff||{},{to:this.value});render()" style="padding:9px;border:1px solid var(--line);border-radius:8px">`:''}
       ${hits.length?`<button class="btn" onclick="rotaStaffPDF()">⬇ PDF</button>`:''}
     </div>
-    ${sv.name?(hits.length?`<table style="margin-top:10px"><thead><tr><th>Date</th><th>Role</th><th>Named as</th></tr></thead><tbody>${rows}</tbody></table>
+    <div id="rotaStaffResultsWrap">${sv.name?(hits.length?`<table style="margin-top:10px"><thead><tr><th>Date</th><th>Role</th><th>Named as</th></tr></thead><tbody>${rows}</tbody></table>
         <div class="sub">${hits.length} shift(s) for "${sv.name}" between ${from} and ${to}.</div>`
       :`<div class="sub" style="margin-top:10px">No shifts found for "${sv.name}" in this period.</div>`)
-      :`<div class="sub" style="margin-top:10px">Type a name to see their shifts.</div>`}
+      :`<div class="sub" style="margin-top:10px">Type a name to see their shifts.</div>`}</div>
   </div>`;
+}
+function refreshRotaStaffSearch(){
+  if(currentView!=='rota') return;
+  const el = document.getElementById('rotaStaffResultsWrap');
+  if(!el) return;
+  const tmp = document.createElement('div');
+  tmp.innerHTML = rotaStaffSearch();
+  const fresh = tmp.querySelector('#rotaStaffResultsWrap');
+  if(fresh) el.innerHTML = fresh.innerHTML;
 }
 
 function rotaView(){
@@ -5874,9 +5945,10 @@ function samplesView(){
     <div class="toolrow" style="margin:6px 0 14px">
       ${canEdit?`<button class="btn primary" onclick="newSample()">＋ New patient / specimens</button>`:''}
       <input type="search" placeholder="Search PAT number, initials, surgeon…" value="${String(window._smpQ||'').replace(/"/g,'&quot;')}"
-        oninput="window._smpQ=this.value;render()" style="flex:1;min-width:220px;padding:10px 12px;border:1px solid var(--line);border-radius:8px">
-      ${window._smpQ?`<button class="btn" onclick="window._smpQ='';render()">Clear</button>`:''}
+        oninput="window._smpQ=this.value;refreshSamples()" style="flex:1;min-width:220px;padding:10px 12px;border:1px solid var(--line);border-radius:8px">
+      ${window._smpQ?`<button class="btn" onclick="window._smpQ='';refreshSamples()">Clear</button>`:''}
     </div>
+    <div id="samplesWrap">
     <div class="toolrow" style="margin-bottom:14px;flex-wrap:wrap">
       <span style="font-size:13px;color:var(--ink-soft);align-self:center">Download report:</span>
       <button class="btn" onclick="samplePDF('day')">Day</button>
@@ -5885,7 +5957,17 @@ function samplesView(){
       <button class="btn" onclick="samplePDFSurgeon()">By surgeon…</button>
       ${window._smpQ?`<button class="btn" onclick="samplePDF('search')">Current search</button>`:''}
     </div>
-    ${body}`;
+    ${body}
+    </div>`;
+}
+function refreshSamples(){
+  if(currentView!=='samples') return;
+  const el = document.getElementById('samplesWrap');
+  if(!el) return;
+  const tmp = document.createElement('div');
+  tmp.innerHTML = samplesView();
+  const fresh = tmp.querySelector('#samplesWrap');
+  if(fresh) el.innerHTML = fresh.innerHTML;
 }
 
 function smpBlankRow(){ return {specimenNo:'', details:'', category:'Histology', formalin:'Yes', notes:'', id:''}; }
