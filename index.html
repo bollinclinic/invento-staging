@@ -2832,7 +2832,7 @@ async function saveNewItem(){
 }
 
 /* ---------------- barcode generation & labels ---------------- */
-const CODE_PREFIX = {consumables:'CON',meds:'MED',garments:'GAR',instruments:'INS',linen:'LIN'};
+const CODE_PREFIX = {consumables:'CON',meds:'MED',garments:'GAR',instruments:'INS',linen:'LIN',services:'SVC'};
 function genCode(tracker){
   const pre = 'BC-' + (CODE_PREFIX[tracker]||'ITM') + '-';
   let max = 0;
@@ -2855,7 +2855,7 @@ function lblItems(){
     (!q || i.name.toLowerCase().includes(q) || (i.code||'').toLowerCase().includes(q)));
 }
 function labelsView(){
-  const trackers = ['consumables','meds','garments','instruments','linen'];
+  const trackers = ['consumables','meds','garments','instruments','linen','services'];
   const items = lblItems();
   const missing = state.items.filter(i=>i.tracker===lbl.tracker && !i.barcode).length;
   const allSel = items.length && items.every(i=>selLbl.has(state.items.indexOf(i)));
@@ -3460,6 +3460,7 @@ function servicesView(){
     return `<tr>
       <td data-label=""><strong>${it.name}</strong></td>
       <td class="code" data-label="Code">${it.code||'—'}</td>
+      <td class="code" data-label="Barcode">${it.barcode||'<span style="color:var(--amber)">none</span>'}</td>
       <td class="qty" data-label="Invoice price">${it.billPrice!=null?'£'+Number(it.billPrice).toFixed(2):'—'}</td>
       <td class="rowbtns" data-label=""><button onclick="openService(${ix})">Edit</button>
         <button onclick="markObsolete(${ix})" style="color:var(--ink-soft)" title="Move to obsolete stock">Obsolete</button></td>
@@ -3467,12 +3468,13 @@ function servicesView(){
   }).join('');
   return `<h1>Services</h1>
     <div class="sub">Billable techniques (Renuvion, VASER, etc.) — added to a procedure's cart exactly like a consumable via the item picker, but using one never reduces a count. The price here is what's invoiced to the surgeon-group contract, separate from any purchase cost.</div>
+    <div class="sub">To print a barcode/QR sticker for a service (e.g. to laminate for quick scanning during procedure costing), use the <strong>Labels</strong> page and pick "Services" as the tracker.</div>
     <div class="toolrow">
       <button class="btn primary" onclick="openService(null)">＋ Add service</button>
       <input type="search" placeholder="Search name or code…" value="${window._svcq||''}" oninput="window._svcq=this.value;refreshServices()">
     </div>
-    <div id="servicesWrap"><table><thead><tr><th>Service</th><th>Code</th><th class="qty">Invoice price</th><th></th></tr></thead>
-    <tbody>${rows||'<tr><td colspan="4" style="color:var(--ink-soft)">No services yet.</td></tr>'}</tbody></table></div>`;
+    <div id="servicesWrap"><table><thead><tr><th>Service</th><th>Code</th><th>Barcode</th><th class="qty">Invoice price</th><th></th></tr></thead>
+    <tbody>${rows||'<tr><td colspan="5" style="color:var(--ink-soft)">No services yet.</td></tr>'}</tbody></table></div>`;
 }
 function refreshServices(){
   if(currentView!=='services') return;
