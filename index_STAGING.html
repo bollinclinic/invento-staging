@@ -3869,9 +3869,9 @@ async function runItemUsageSearch(){
 function itemUsageCSV(){
   if(!_itemUsageRows || !_itemUsageRows.length){ toast('Nothing to export'); return; }
   const rows = _itemUsageRows.map(r=>[r.item_name, r.code||'', new Date(r.date).toLocaleDateString('en-GB'),
-    r.surgeon||'', r.patient_ref||'', r.qty, r.by||'']);
+    r.surgeon||'', r.procedure_name||'', r.patient_ref||'', r.qty, r.by||'']);
   downloadCSV('Item_Usage_'+new Date().toISOString().slice(0,10)+'.csv',
-    ['Item','Code','Date used','Surgeon','PAT Number','Qty','Added by'], rows);
+    ['Item','Code','Date used','Surgeon','Procedure','PAT Number','Qty','Added by'], rows);
 }
 
 /* ---------------- gas room daily checks ---------------- */
