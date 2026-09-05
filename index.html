@@ -802,7 +802,12 @@
   <div class="m-body">
     <div class="m-row"><label for="svcName">Name *</label><input id="svcName" type="text" placeholder="e.g. Renuvion"></div>
     <div class="m-row"><label for="svcCode">Code</label><input id="svcCode" type="text" placeholder="e.g. SVC-RENUVION" style="font-family:var(--mono)"></div>
+    <div class="m-row"><label for="svcCat">Category</label>
+      <select id="svcCat"><option value="">—</option><option value="Theatre">Theatre</option><option value="Ward/Preop">Ward/Preop</option></select></div>
     <div class="m-row"><label for="svcPrice">Invoice price (£)</label><input id="svcPrice" type="number" step="0.01" min="0" placeholder="e.g. 1500.00"></div>
+    <div class="m-row"><label for="svcBar">QR / Barcode</label>
+      <input id="svcBar" type="text" placeholder="Generate or scan" style="font-family:var(--mono)">
+      <button class="btn" style="padding:8px 10px" onclick="$('#svcBar').value=genCode('services')" title="Generate a Bollin code">Generate</button></div>
   </div>
   <div class="m-actions">
     <button class="btn" onclick="serviceDlg.close()">Cancel</button>
@@ -3450,22 +3455,11 @@ async function doMoveBackOffsite(){
 // -- location, stores, stocktake and expiry don't mean anything for something with no
 // physical quantity, and qty=0 forever would otherwise misleadingly show as "out of stock"
 // everywhere the generic tracker machinery is reused.
-function serviceQrCell(it, ix){
-  if(!it.barcode){
-    return `<button onclick="generateServiceCode(${ix})">Generate QR</button>`;
-  }
-  let dataUrl = '';
-  try{ dataUrl = makeSymbolDataUrl(it.barcode, 'qr').url; }catch(e){}
-  return `<div style="display:flex;flex-direction:column;align-items:center;gap:3px">
-      <span style="font-size:10.5px;font-weight:700;max-width:100px;text-align:center;line-height:1.15">${it.name}</span>
-      ${dataUrl?`<img src="${dataUrl}" alt="QR code" style="width:64px;height:64px">`:''}
-      <span class="code" style="font-size:10px">${it.barcode}</span>
-      <button onclick="generateServiceCode(${ix})" style="font-size:11px;padding:3px 8px" title="Replace with a new code">Regenerate</button>
-    </div>`;
-}
 function servicesView(){
   const q = (window._svcq||'').toLowerCase();
+  const catF = window._svcCat||'';
   const list = state.items.filter(i=>i.tracker==='services' && !i.obsolete &&
+    (!catF || i.cat===catF) &&
     (!q || i.name.toLowerCase().includes(q) || (i.code||'').toLowerCase().includes(q)))
     .sort((a,b)=>a.name.localeCompare(b.name));
   const rows = list.map(it=>{
@@ -3473,7 +3467,7 @@ function servicesView(){
     return `<tr>
       <td data-label=""><strong>${it.name}</strong></td>
       <td class="code" data-label="Code">${it.code||'—'}</td>
-      <td data-label="QR code">${serviceQrCell(it, ix)}</td>
+      <td data-label="Category">${it.cat||'—'}</td>
       <td class="qty" data-label="Invoice price">${it.billPrice!=null?'£'+Number(it.billPrice).toFixed(2):'—'}</td>
       <td class="rowbtns" data-label=""><button onclick="openService(${ix})">Edit</button>
         <button onclick="markObsolete(${ix})" style="color:var(--ink-soft)" title="Move to obsolete stock">Obsolete</button></td>
@@ -3481,30 +3475,18 @@ function servicesView(){
   }).join('');
   return `<h1>Services</h1>
     <div class="sub">Billable techniques (Renuvion, VASER, etc.) — added to a procedure's cart exactly like a consumable via the item picker, but using one never reduces a count. The price here is what's invoiced to the surgeon-group contract, separate from any purchase cost.</div>
-    <div class="sub">Generate a QR code below for each service, then print/laminate it from <strong>Sticker printer → Barcode / QR</strong> (pick "Services" from the tracker list). Scanning the laminated code during procedure costing adds that service to the cart.</div>
+    <div class="sub">A QR code can be generated when adding or editing a service. Print/laminate it from <strong>Sticker printer → Barcode / QR</strong> (pick "Services" from the tracker list) — scanning it during procedure costing adds that service to the cart.</div>
     <div class="toolrow">
       <button class="btn primary" onclick="openService(null)">＋ Add service</button>
+      <select onchange="window._svcCat=this.value;refreshServices()">
+        <option value="" ${!catF?'selected':''}>All categories</option>
+        <option value="Theatre" ${catF==='Theatre'?'selected':''}>Theatre</option>
+        <option value="Ward/Preop" ${catF==='Ward/Preop'?'selected':''}>Ward/Preop</option>
+      </select>
       <input type="search" placeholder="Search name or code…" value="${window._svcq||''}" oninput="window._svcq=this.value;refreshServices()">
     </div>
-    <div id="servicesWrap"><table><thead><tr><th>Service</th><th>Code</th><th>QR code</th><th class="qty">Invoice price</th><th></th></tr></thead>
-    <tbody>${rows||'<tr><td colspan="5" style="color:var(--ink-soft)">No services yet.</td></tr>'}</tbody></table></div>`;
-}
-async function generateServiceCode(ix){
-  const it = state.items[ix];
-  if(!it) return;
-  if(!it._row){ toast('Still saving this service — try again in a moment'); return; }
-  const old = it.barcode;
-  const code = genCode('services');
-  it.barcode = code;
-  render();
-  if(!LIVE){ toast('QR code generated (demo mode — not saved)'); return; }
-  try{
-    await api({action:'setBarcodeById', itemId: it._row, barcode: code});
-    toast('QR code generated for '+it.name);
-  }catch(err){
-    it.barcode = old; render();
-    toast('Not saved — '+err.message);
-  }
+    <div id="servicesWrap"><table><thead><tr><th>Service</th><th>Code</th><th>Category</th><th class="qty">Invoice price</th><th></th></tr></thead>
+    <tbody>${rows||'<tr><td colspan="5" style="color:var(--ink-soft)">No services match.</td></tr>'}</tbody></table></div>`;
 }
 function refreshServices(){
   if(currentView!=='services') return;
@@ -3521,7 +3503,9 @@ function openService(ix){
   const s = editService || {};
   $('#svcName').value = s.name||'';
   $('#svcCode').value = s.code||'';
+  $('#svcCat').value = s.cat||'';
   $('#svcPrice').value = s.billPrice!=null ? s.billPrice : '';
+  $('#svcBar').value = s.barcode||'';
   $('#svcDlgTitle').textContent = editService?'Edit service':'Add service';
   $('#svcDlgSave').textContent = editService?'Save changes':'Add service';
   serviceDlg.showModal();
@@ -3531,23 +3515,27 @@ async function saveService(){
   const name = $('#svcName').value.trim();
   if(!name){ toast('Name is required'); return; }
   const code = $('#svcCode').value.trim();
+  const cat = $('#svcCat').value;
   const priceRaw = $('#svcPrice').value;
   const price = priceRaw===''?null:Number(priceRaw);
+  const barcode = $('#svcBar').value.trim();
   if(editService){
-    editService.name=name; editService.code=code; editService.billPrice=price;
+    editService.name=name; editService.code=code; editService.cat=cat; editService.billPrice=price; editService.barcode=barcode;
     serviceDlg.close(); render(); toast('Updated: '+name);
     if(LIVE && editService._row){
-      try{ await api({action:'updateItem', tracker:'Services', row:editService._row, fields:{Name:name, Code:code, BillPrice:price}}); }
+      try{ await api({action:'updateItem', tracker:'Services', row:editService._row,
+        fields:{Name:name, Code:code, Category:cat, BillPrice:price, Barcode:barcode}}); }
       catch(err){ toast('Not saved — '+err.message); loadAll(); }
     }
     editService=null; return;
   }
-  const newItem = {tracker:'services', _row:null, name, code, billPrice:price, qty:0, reorder:0, unit:'Use', cat:'', loc:'', supplier:'', obsolete:false};
+  const newItem = {tracker:'services', _row:null, name, code, cat, billPrice:price, barcode, qty:0, reorder:0, unit:'Use', loc:'', supplier:'', obsolete:false};
   state.items.push(newItem);
   serviceDlg.close(); render(); toast('Service added: '+name);
   if(LIVE){
     try{
-      const row = await api({action:'addItem', tracker:'Services', fields:{Name:name, Code:code, BillPrice:price, Unit:'Use', Qty:0, ReorderLevel:0}});
+      const row = await api({action:'addItem', tracker:'Services',
+        fields:{Name:name, Code:code, Category:cat, BillPrice:price, Barcode:barcode, Unit:'Use', Qty:0, ReorderLevel:0}});
       newItem._row = row.row;
     }catch(err){ toast('Not saved — '+err.message); loadAll(); }
   }
