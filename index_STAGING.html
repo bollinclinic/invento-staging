@@ -469,6 +469,7 @@
     <a href="#offsite" data-view="offsite">Offsite store</a>
     <a href="#services" data-view="services">Services</a>
     <a href="#billing" data-view="billing">Surgeon billing report</a>
+    <a href="#itemusage" data-view="itemusage">Item usage search</a>
     <a href="#obsolete" data-view="obsolete">Obsolete stock</a>
     <a href="#assets" data-view="assets">Assets</a>
     <a href="#stickers" data-view="stickers">Sticker printer</a>
@@ -3614,21 +3615,93 @@ async function billingReportPDF(){
   doc.save('Surgeon_Billing_Report_'+new Date().toISOString().slice(0,10)+'.pdf');
   toast('Billing report PDF downloaded');
 }
-function billingReportCSV(){
-  if(!_billingRows || !_billingRows.length){ toast('Nothing to export'); return; }
-  const header = ['Surgeon','Date','Procedure','PAT Number','Item / Service','Qty','Price'];
+// Shared by every CSV export (billing report, item usage search, …) -- the UTF-8 BOM prefix
+// keeps Excel from mangling £ signs and accented names like Žygimantas Mačys.
+function downloadCSV(filename, header, rows){
   const escape = v => { const s = String(v==null?'':v); return /[",\n]/.test(s) ? '"'+s.replace(/"/g,'""')+'"' : s; };
-  const sorted = [...(_billingRows||[])].sort((a,b)=> (a.surgeon||'').localeCompare(b.surgeon||'') || new Date(a.date)-new Date(b.date));
-  const rows = sorted.map(r=>[r.surgeon||'', new Date(r.date).toLocaleDateString('en-GB'), r.procedure_name||'',
-    r.patient_ref||'', r.item_name, r.qty, r.bill_line_cost!=null?Number(r.bill_line_cost).toFixed(2):'']);
   const csv = [header, ...rows].map(row=>row.map(escape).join(',')).join('\r\n');
   const blob = new Blob(['﻿'+csv], {type:'text/csv;charset=utf-8;'});
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
-  a.href = url; a.download = 'Surgeon_Billing_Report_'+new Date().toISOString().slice(0,10)+'.csv';
+  a.href = url; a.download = filename;
   document.body.appendChild(a); a.click(); document.body.removeChild(a);
   URL.revokeObjectURL(url);
   toast('CSV downloaded');
+}
+function billingReportCSV(){
+  if(!_billingRows || !_billingRows.length){ toast('Nothing to export'); return; }
+  const sorted = [...(_billingRows||[])].sort((a,b)=> (a.surgeon||'').localeCompare(b.surgeon||'') || new Date(a.date)-new Date(b.date));
+  const rows = sorted.map(r=>[r.surgeon||'', new Date(r.date).toLocaleDateString('en-GB'), r.procedure_name||'',
+    r.patient_ref||'', r.item_name, r.qty, r.bill_line_cost!=null?Number(r.bill_line_cost).toFixed(2):'']);
+  downloadCSV('Surgeon_Billing_Report_'+new Date().toISOString().slice(0,10)+'.csv',
+    ['Surgeon','Date','Procedure','PAT Number','Item / Service','Qty','Price'], rows);
+}
+
+/* ---------------- item usage search — superadmin only ---------------- */
+// Search any consumable/medicine/garment/linen item or service by name or code and see every
+// procedure it was used in — for cases like "did we actually use this many Lighted Retractors,
+// and on whom" that the billing report doesn't answer (it only covers rate-list items).
+// Sterilisation is excluded server-side: instruments already have their own dispatch/use
+// history, this is for the trackers billing/stock decisions get made around.
+let _itemUsageRows = null;   // null = not yet searched; [] once run with no matches
+function itemUsageView(){
+  return `<h1>Item usage search</h1>
+    <div class="sub">Search by item name or code (e.g. "Lighted Retractor" or "C100110") to see every procedure it was used in — every tracker except sterilisation.</div>
+    <div class="toolrow">
+      <input id="iuQuery" type="search" placeholder="Item name or code…" style="flex:1;min-width:200px;padding:9px 10px;border:1px solid var(--line);border-radius:8px">
+      <select id="iuRange" onchange="$('#iuCustom').style.display=this.value==='custom'?'flex':'none'">
+        <option value="day">Today</option>
+        <option value="week">This week</option>
+        <option value="month" selected>This month</option>
+        <option value="year">This year</option>
+        <option value="custom">Custom dates</option>
+      </select>
+      <span id="iuCustom" style="display:none;gap:6px;align-items:center">
+        <input id="iuFrom" type="date" style="padding:8px;border:1px solid var(--line);border-radius:8px">
+        <span>to</span>
+        <input id="iuTo" type="date" style="padding:8px;border:1px solid var(--line);border-radius:8px">
+      </span>
+      <button class="btn primary" onclick="runItemUsageSearch()">Search</button>
+      ${_itemUsageRows && _itemUsageRows.length?`<button class="btn" onclick="itemUsageCSV()">Download CSV</button>`:''}
+    </div>
+    <div id="itemUsageWrap">${itemUsageBody()}</div>`;
+}
+function itemUsageBody(){
+  if(_itemUsageRows===null) return `<div class="sub">Type a name or code and click Search.</div>`;
+  if(!_itemUsageRows.length) return `<div class="sub">No usage found for this search and period.</div>`;
+  const rows = _itemUsageRows.map(r=>`<tr>
+      <td data-label="Date">${new Date(r.date).toLocaleDateString('en-GB')}</td>
+      <td data-label="Item">${r.item_name}${r.code?` <span class="code" style="font-family:var(--mono);font-size:11.5px">${r.code}</span>`:''}</td>
+      <td data-label="Tracker">${TRACKER_LABEL[r.tracker]||r.tracker}</td>
+      <td data-label="Surgeon">${r.surgeon||'—'}</td>
+      <td data-label="Procedure">${r.procedure_name||'—'}</td>
+      <td data-label="PAT">${r.patient_ref||'—'}</td>
+      <td class="qty" data-label="Qty">${r.qty}</td>
+      <td data-label="Added by">${r.by||'—'}</td>
+    </tr>`).join('');
+  return `<div class="sub">${_itemUsageRows.length} use(s) found</div>
+    <table><thead><tr><th>Date</th><th>Item</th><th>Tracker</th><th>Surgeon</th><th>Procedure</th><th>PAT</th><th class="qty">Qty</th><th>Added by</th></tr></thead>
+    <tbody>${rows}</tbody></table>`;
+}
+async function runItemUsageSearch(){
+  const range = resolveRange('iu');
+  if(!range) return;
+  const query = $('#iuQuery').value.trim();
+  const el = document.getElementById('itemUsageWrap');
+  if(el) el.innerHTML = '<div class="sub">Searching…</div>';
+  try{
+    const res = await api({action:'itemUsageReport', query, from: range.from.toISOString().slice(0,10),
+      to: range.to.toISOString().slice(0,10)});
+    _itemUsageRows = res.rows||[];
+  }catch(err){ toast('Could not search — '+err.message); _itemUsageRows = []; }
+  render();
+}
+function itemUsageCSV(){
+  if(!_itemUsageRows || !_itemUsageRows.length){ toast('Nothing to export'); return; }
+  const rows = _itemUsageRows.map(r=>[r.item_name, r.code||'', new Date(r.date).toLocaleDateString('en-GB'),
+    r.surgeon||'', r.patient_ref||'', r.qty, r.by||'']);
+  downloadCSV('Item_Usage_'+new Date().toISOString().slice(0,10)+'.csv',
+    ['Item','Code','Date used','Surgeon','PAT Number','Qty','Added by'], rows);
 }
 
 /* ---------------- gas room daily checks ---------------- */
@@ -6502,6 +6575,7 @@ function render(){
   else if(v==='offsite') m.innerHTML = offsiteView();
   else if(v==='services') m.innerHTML = servicesView();
   else if(v==='billing') m.innerHTML = billingReportView();
+  else if(v==='itemusage') m.innerHTML = itemUsageView();
   else if(v==='assets') m.innerHTML = assetsView();
   else if(v==='gas'){ m.innerHTML = gasView(); paintDeliv('o2'); paintDeliv('air'); }
   else if(v==='stickers') m.innerHTML = stickersView();
@@ -6841,6 +6915,13 @@ async function api(payload){
     const {data, error} = await sb.rpc('proc_add_billing_line', {p_procedure_id: payload.procedureId, p_item_id: payload.itemId, p_qty: payload.qty||1});
     if(error) throw new Error(error.message);
     return {ok:true, lineId: data.line_id};
+  }
+  if(a==='itemUsageReport'){
+    const {data, error} = await sb.rpc('item_usage_report', {p_query: payload.query||null, p_from: payload.from||null, p_to: payload.to||null});
+    if(error) throw new Error(error.message);
+    return {ok:true, rows: (data||[]).map(r=>({procedure_id:r.procedure_id, date:r.date, surgeon:r.surgeon,
+      patient_ref:r.patient_ref, procedure_name:r.procedure_name, item_name:r.item_name, code:r.code,
+      tracker:r.tracker, qty:Number(r.qty)||0, by:r.by}))};
   }
   if(a==='setBarcodes'){
     let done=0; const errors=[];
@@ -7396,6 +7477,7 @@ function viewAllowed(v){
   if(v==='offsite') return can('stores');
   if(v==='services') return can('stores');
   if(v==='billing') return isSuperadmin();   // contract pricing data -- superadmin only
+  if(v==='itemusage') return isSuperadmin();
   if(v==='assets') return can('assets');
   if(v==='stickers') return can('sticker');
   if(v==='procedures') return true;   // all roles can run procedures (financials hidden inside)
