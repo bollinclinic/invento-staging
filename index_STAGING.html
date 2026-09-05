@@ -3533,7 +3533,8 @@ function billingReportView(){
         <input id="billTo" type="date" style="padding:8px;border:1px solid var(--line);border-radius:8px">
       </span>
       <button class="btn primary" onclick="runBillingReport()">Generate report</button>
-      ${_billingRows && _billingRows.length?`<button class="btn" onclick="billingReportPDF()">Download PDF</button>`:''}
+      ${_billingRows && _billingRows.length?`<button class="btn" onclick="billingReportPDF()">Download PDF</button>
+      <button class="btn" onclick="billingReportCSV()">Download CSV</button>`:''}
     </div>
     <div id="billingWrap">${billingReportBody()}</div>`;
 }
@@ -3612,6 +3613,22 @@ async function billingReportPDF(){
   });
   doc.save('Surgeon_Billing_Report_'+new Date().toISOString().slice(0,10)+'.pdf');
   toast('Billing report PDF downloaded');
+}
+function billingReportCSV(){
+  if(!_billingRows || !_billingRows.length){ toast('Nothing to export'); return; }
+  const header = ['Surgeon','Date','Procedure','PAT Number','Item / Service','Qty','Price'];
+  const escape = v => { const s = String(v==null?'':v); return /[",\n]/.test(s) ? '"'+s.replace(/"/g,'""')+'"' : s; };
+  const sorted = [...(_billingRows||[])].sort((a,b)=> (a.surgeon||'').localeCompare(b.surgeon||'') || new Date(a.date)-new Date(b.date));
+  const rows = sorted.map(r=>[r.surgeon||'', new Date(r.date).toLocaleDateString('en-GB'), r.procedure_name||'',
+    r.patient_ref||'', r.item_name, r.qty, r.bill_line_cost!=null?Number(r.bill_line_cost).toFixed(2):'']);
+  const csv = [header, ...rows].map(row=>row.map(escape).join(',')).join('\r\n');
+  const blob = new Blob(['﻿'+csv], {type:'text/csv;charset=utf-8;'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'Surgeon_Billing_Report_'+new Date().toISOString().slice(0,10)+'.csv';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  toast('CSV downloaded');
 }
 
 /* ---------------- gas room daily checks ---------------- */
@@ -4448,7 +4465,32 @@ function procViewBlockHtml(){
       <tbody>${rows}</tbody>
       ${showMoney?`<tfoot><tr><td colspan="${lines.length?3:1}"></td><td colspan="2" class="qty" style="font-weight:bold">Total £${total.toFixed(2)}</td></tr></tfoot>`:''}
     </table>
+    ${can('edit')?`<div class="toolrow" style="margin-top:12px;background:var(--mist);border-radius:8px;padding:10px">
+      <select id="addSvcSelect" style="padding:8px 10px;border:1px solid var(--line);border-radius:8px;flex:1;min-width:200px">
+        <option value="">Add a service used in this case…</option>
+        ${state.items.filter(i=>i.tracker==='services'&&!i.obsolete).sort((a,b)=>a.name.localeCompare(b.name))
+          .map(s=>`<option value="${s._row}">${s.name}${s.billPrice!=null?' — £'+Number(s.billPrice).toFixed(2):''}</option>`).join('')}
+      </select>
+      <input id="addSvcQty" type="number" min="1" value="1" style="width:70px;padding:8px;border:1px solid var(--line);border-radius:8px">
+      <button class="btn" onclick="addServiceToProcedure('${p.procedureId}')">＋ Add</button>
+    </div>
+    <div class="sub" style="margin:6px 0 0">For backfilling services used in old cases before this was tracked — only affects billing, never stock.</div>`:''}
   </div>`;
+}
+async function addServiceToProcedure(procId){
+  const sel = $('#addSvcSelect'), qtyEl = $('#addSvcQty');
+  const itemId = sel.value;
+  if(!itemId){ toast('Choose a service first'); return; }
+  const qty = Math.max(1, parseInt(qtyEl.value)||1);
+  const item = state.items.find(i=>i._row===itemId);
+  if(!item){ toast('Service not found — try reloading'); return; }
+  if(!confirm('Add '+qty+' × '+item.name+' to this procedure?'+
+    (item.billPrice!=null?' ('+'£'+(item.billPrice*qty).toFixed(2)+')':''))) return;
+  try{
+    await api({action:'procAddBillingLine', procedureId:procId, itemId, qty});
+    toast('Added: '+item.name);
+    await procViewOnScreen(procId);
+  }catch(err){ toast('Not saved — '+err.message); }
 }
 
 function procHistGoPage(n){ _procHistPage = n; render(); }
@@ -6794,6 +6836,11 @@ async function api(payload){
       surgeon_id:r.surgeon_id, procedure_name:r.procedure_name, patient_ref:r.patient_ref,
       item_name:r.item_name, tracker:r.tracker, qty:Number(r.qty)||0,
       bill_price: r.bill_price==null?null:Number(r.bill_price), bill_line_cost: r.bill_line_cost==null?null:Number(r.bill_line_cost)}))};
+  }
+  if(a==='procAddBillingLine'){
+    const {data, error} = await sb.rpc('proc_add_billing_line', {p_procedure_id: payload.procedureId, p_item_id: payload.itemId, p_qty: payload.qty||1});
+    if(error) throw new Error(error.message);
+    return {ok:true, lineId: data.line_id};
   }
   if(a==='setBarcodes'){
     let done=0; const errors=[];
