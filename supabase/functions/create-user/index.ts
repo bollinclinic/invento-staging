@@ -1,14 +1,15 @@
-// Superadmin-only "create a new clinic staff account" action. Auth admin.createUser needs the
-// service-role key, which must never reach the browser -- so this runs server-side as an Edge
-// Function instead of a client call. The caller's own JWT is verified against `profiles`
-// (rank>=3) before any privileged action runs; only then is a separate service-role client
+// Developer-only "create a new clinic staff account" action (tightened from superadmin --
+// Users & roles is now a developer-only area). Auth admin.createUser needs the service-role
+// key, which must never reach the browser -- so this runs server-side as an Edge Function
+// instead of a client call. The caller's own JWT is verified against `profiles` (role =
+// developer) before any privileged action runs; only then is a separate service-role client
 // used to actually create the auth user. New accounts get a fixed default password the
-// superadmin can hand to the new starter, who is expected to change it on first login via the
+// developer can hand to the new starter, who is expected to change it on first login via the
 // existing "change password" feature.
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 const DEFAULT_PASSWORD = "Bollin123!";
-const VALID_ROLES = ["common", "staff", "admin", "superadmin"];
+const VALID_ROLES = ["common", "staff", "admin", "superadmin", "developer"];
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -33,9 +34,9 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ error: "Not signed in" }), { status: 401, headers: corsHeaders });
     }
     const { data: profile, error: profErr } = await callerClient
-      .from("profiles").select("role").eq("id", userData.user.id).single();
-    if (profErr || !profile || profile.role !== "superadmin") {
-      return new Response(JSON.stringify({ error: "Superadmin access required" }), { status: 403, headers: corsHeaders });
+      .from("profiles").select("role,active").eq("id", userData.user.id).single();
+    if (profErr || !profile || profile.role !== "developer" || profile.active !== true) {
+      return new Response(JSON.stringify({ error: "Developer access required" }), { status: 403, headers: corsHeaders });
     }
 
     const body = await req.json();
