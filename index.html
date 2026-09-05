@@ -3783,7 +3783,18 @@ function billingReportCSV(){
 // Sterilisation is excluded server-side: instruments already have their own dispatch/use
 // history, this is for the trackers billing/stock decisions get made around.
 let _itemUsageRows = null;   // null = not yet searched; [] once run with no matches
+// Advanced surgeon/category filter panel -- deliberately a plain in-memory flag, never
+// persisted, so it's always closed again the next time the app is opened, per explicit
+// request, without disturbing the base search layout above it when off.
+let _itemUsageAdvanced = false;
+function toggleItemUsageAdvanced(){
+  _itemUsageAdvanced = !_itemUsageAdvanced;
+  if(!_itemUsageAdvanced){ window._surgeonPick['iuSurgeon'] = null; window._iuCategory = ''; }
+  render();
+}
 function itemUsageView(){
+  window._surgeonPick = window._surgeonPick||{};
+  const cats = [...new Set((state.items||[]).map(i=>i.cat).filter(Boolean))].sort();
   return `<h1>Item usage search</h1>
     <div class="sub">Search by item name or code (e.g. "Lighted Retractor" or "C100110") to see every procedure it was used in — every tracker except sterilisation.</div>
     <div class="toolrow">
@@ -3802,7 +3813,19 @@ function itemUsageView(){
       </span>
       <button class="btn primary" onclick="runItemUsageSearch()">Search</button>
       ${_itemUsageRows && _itemUsageRows.length?`<button class="btn" onclick="itemUsageCSV()">Download CSV</button>`:''}
+      <button class="btn" onclick="toggleItemUsageAdvanced()">${_itemUsageAdvanced?'✕ Close special query':'⚙ Special query'}</button>
     </div>
+    ${_itemUsageAdvanced?`
+    <div class="toolrow" style="background:var(--mist);border-radius:10px;padding:10px 12px">
+      <div style="min-width:220px;flex:1"><label style="font-size:12px;color:var(--ink-soft);display:block;margin-bottom:4px">Surgeon</label>
+        ${surgeonInputHTML('iuSurgeon', window._surgeonPick['iuSurgeon']?window._surgeonPick['iuSurgeon'].name:'', 'Type 3+ letters…')}</div>
+      <div style="min-width:180px"><label style="font-size:12px;color:var(--ink-soft);display:block;margin-bottom:4px">Category</label>
+        <select id="iuCategory" onchange="window._iuCategory=this.value" style="width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:9px">
+          <option value="">Any category</option>
+          ${cats.map(c=>`<option value="${escapeAttr(c)}" ${window._iuCategory===c?'selected':''}>${c}</option>`).join('')}
+        </select></div>
+      <div class="sub" style="flex-basis:100%;margin:0">Combine with the item search box above — leave it blank to see every item in a category for this surgeon, or fill it in to check one specific item.</div>
+    </div>` : ''}
     <div id="itemUsageWrap">${itemUsageBody()}</div>`;
 }
 function itemUsageBody(){
@@ -3826,11 +3849,19 @@ async function runItemUsageSearch(){
   const range = resolveRange('iu');
   if(!range) return;
   const query = $('#iuQuery').value.trim();
+  let surgeonId = null, category = '';
+  if(_itemUsageAdvanced){
+    const surgeonText = ($('#iuSurgeon').value||'').trim();
+    const pick = window._surgeonPick['iuSurgeon'];
+    if(surgeonText && (!pick || pick.name!==surgeonText)){ toast('Select a surgeon from the list, or clear the field'); return; }
+    surgeonId = pick ? pick.id : null;
+    category = window._iuCategory || '';
+  }
   const el = document.getElementById('itemUsageWrap');
   if(el) el.innerHTML = '<div class="sub">Searching…</div>';
   try{
     const res = await api({action:'itemUsageReport', query, from: range.from.toISOString().slice(0,10),
-      to: range.to.toISOString().slice(0,10)});
+      to: range.to.toISOString().slice(0,10), surgeonId, category});
     _itemUsageRows = res.rows||[];
   }catch(err){ toast('Could not search — '+err.message); _itemUsageRows = []; }
   render();
@@ -7106,7 +7137,8 @@ async function api(payload){
     return {ok:true, lineId: data.line_id};
   }
   if(a==='itemUsageReport'){
-    const {data, error} = await sb.rpc('item_usage_report', {p_query: payload.query||null, p_from: payload.from||null, p_to: payload.to||null});
+    const {data, error} = await sb.rpc('item_usage_report', {p_query: payload.query||null, p_from: payload.from||null, p_to: payload.to||null,
+      p_surgeon_id: payload.surgeonId||null, p_category: payload.category||null});
     if(error) throw new Error(error.message);
     return {ok:true, rows: (data||[]).map(r=>({procedure_id:r.procedure_id, date:r.date, surgeon:r.surgeon,
       patient_ref:r.patient_ref, procedure_name:r.procedure_name, item_name:r.item_name, code:r.code,
