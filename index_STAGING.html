@@ -339,6 +339,14 @@
   .logincard .btn{width:100%;margin-top:18px;padding:13px 0;font-size:15px}
   #loginErr{color:var(--red);font-size:13px;margin-top:10px;min-height:18px;text-align:center}
 
+  /* ---------- password fields: eye toggle to confirm what was typed ---------- */
+  .pwfield{position:relative;flex:1}
+  .logincard .pwfield input,.m-row .pwfield input{width:100%;padding-right:38px}
+  .pwfield .pw-eye{position:absolute;right:4px;top:50%;transform:translateY(-50%);background:none;border:none;
+    cursor:pointer;padding:6px 8px;font-size:16px;line-height:1;opacity:.45;border-radius:6px}
+  .pwfield .pw-eye:hover{opacity:.8;background:var(--mist)}
+  .pwfield .pw-eye.active{opacity:1}
+
   /* ---------- printable labels ---------- */
   #printArea{display:none}
   .labelgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:4mm;padding:6mm}
@@ -809,8 +817,11 @@
     <label for="liUser">Username</label>
     <input id="liUser" type="text" autocomplete="username" autocapitalize="none">
     <label for="liPass">Password</label>
-    <input id="liPass" type="password" autocomplete="current-password"
-           onkeydown="if(event.key==='Enter')doLogin()">
+    <div class="pwfield">
+      <input id="liPass" type="password" autocomplete="current-password"
+             onkeydown="if(event.key==='Enter')doLogin()">
+      <button class="pw-eye" onclick="togglePwVisibility(this,'liPass')" title="Show/hide password">👁</button>
+    </div>
     <button class="btn primary" onclick="doLogin()">Sign in</button>
     <div id="loginErr"></div>
     <div style="text-align:center;margin-top:14px;font-size:12px;color:var(--ink-soft)">
@@ -821,9 +832,12 @@
 <dialog id="pwDlg">
   <div class="m-head">Change password</div>
   <div class="m-body">
-    <div class="m-row"><label for="pwOld">Current</label><input id="pwOld" type="password"></div>
-    <div class="m-row"><label for="pwNew">New (6+ chars)</label><input id="pwNew" type="password"></div>
-    <div class="m-row"><label for="pwNew2">Repeat new</label><input id="pwNew2" type="password"></div>
+    <div class="m-row"><label for="pwOld">Current</label><div class="pwfield"><input id="pwOld" type="password">
+      <button class="pw-eye" onclick="togglePwVisibility(this,'pwOld')" title="Show/hide password">👁</button></div></div>
+    <div class="m-row"><label for="pwNew">New (6+ chars)</label><div class="pwfield"><input id="pwNew" type="password">
+      <button class="pw-eye" onclick="togglePwVisibility(this,'pwNew')" title="Show/hide password">👁</button></div></div>
+    <div class="m-row"><label for="pwNew2">Repeat new</label><div class="pwfield"><input id="pwNew2" type="password">
+      <button class="pw-eye" onclick="togglePwVisibility(this,'pwNew2')" title="Show/hide password">👁</button></div></div>
   </div>
   <div class="m-actions">
     <button class="btn" onclick="pwDlg.close()">Cancel</button>
@@ -6651,6 +6665,12 @@ function synthEmail(username){ return String(username||'').trim().toLowerCase() 
 function numOrNull(v){ return v===''||v==null ? null : Number(v); }
 function strOrNull(v){ return v===''||v==null ? null : v; }
 function low(v){ return String(v||'').toLowerCase(); }
+function togglePwVisibility(btn, inputId){
+  const el = document.getElementById(inputId);
+  const show = el.type==='password';
+  el.type = show?'text':'password';
+  btn.classList.toggle('active', show);
+}
 
 /* ---- row-shape translators: Postgres snake_case <-> old Sheet-header PascalCase ----
    _row on every translated row is the record's real uuid — it stood for a fragile
