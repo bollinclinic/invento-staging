@@ -467,6 +467,8 @@
     <div class="navsec">Admin</div>
     <a href="#stores" data-view="stores">Stores & transfers</a>
     <a href="#offsite" data-view="offsite">Offsite store</a>
+    <a href="#services" data-view="services">Services</a>
+    <a href="#billing" data-view="billing">Surgeon billing report</a>
     <a href="#obsolete" data-view="obsolete">Obsolete stock</a>
     <a href="#assets" data-view="assets">Assets</a>
     <a href="#stickers" data-view="stickers">Sticker printer</a>
@@ -786,6 +788,19 @@
   </div>
 </dialog>
 
+<dialog id="serviceDlg">
+  <div class="m-head" id="svcDlgTitle">Add service</div>
+  <div class="m-body">
+    <div class="m-row"><label for="svcName">Name *</label><input id="svcName" type="text" placeholder="e.g. Renuvion"></div>
+    <div class="m-row"><label for="svcCode">Code</label><input id="svcCode" type="text" placeholder="e.g. SVC-RENUVION" style="font-family:var(--mono)"></div>
+    <div class="m-row"><label for="svcPrice">Invoice price (£)</label><input id="svcPrice" type="number" step="0.01" min="0" placeholder="e.g. 1500.00"></div>
+  </div>
+  <div class="m-actions">
+    <button class="btn" onclick="serviceDlg.close()">Cancel</button>
+    <button class="btn primary" id="svcDlgSave" onclick="saveService()">Add service</button>
+  </div>
+</dialog>
+
 <div id="loginWrap" style="display:none">
   <div class="logincard">
     <img src="logo.png" alt="Bollin Clinic Stock Manager">
@@ -850,7 +865,7 @@ const CONFIG = {
   SUPABASE_URL: "https://ozlskwtbgblfmqjgcrmf.supabase.co",
   SUPABASE_ANON_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im96bHNrd3RiZ2JsZm1xamdjcm1mIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcwNTQyNzEsImV4cCI6MjEwMjYzMDI3MX0.jTRbcxqPHoygje8zMXEZk-TaxJKv3m-y6-ZtY9wS0JA"
 };
-const TRACKER_TAB = {consumables:'Consumables',meds:'Meds',garments:'Garments',instruments:'Instruments',linen:'Linen'};
+const TRACKER_TAB = {consumables:'Consumables',meds:'Meds',garments:'Garments',instruments:'Instruments',linen:'Linen',services:'Services'};
 // Stock moved offsite (limited on-site space) is deliberately invisible everywhere in the
 // active inventory -- trackers, dashboard counts, stock value, procedure scanning, stocktake
 // -- until someone manually moves it back. It only ever shows up in the dedicated Offsite
@@ -901,7 +916,7 @@ const state = {
   barcodeLinks: {}  // scanned barcode -> item index (persisted server-side in v2)
 };
 
-const TRACKER_LABEL = {consumables:'Consumables',meds:'Medicines',garments:'Garments',instruments:'Sterilisation',linen:'Linen'};
+const TRACKER_LABEL = {consumables:'Consumables',meds:'Medicines',garments:'Garments',instruments:'Sterilisation',linen:'Linen',services:'Services'};
 let currentView = 'dashboard';
 let dlgItem = null, dlgDir = 'out';
 
@@ -1288,7 +1303,7 @@ async function bulkGenerateBarcodes(key){
 }
 
 function dashboardView(){
-  const stock = state.items.filter(i=>i.tracker!=='instruments' && !i.obsolete && i.loc!==OFFSITE_STORE);
+  const stock = state.items.filter(i=>i.tracker!=='instruments' && i.tracker!=='services' && !i.obsolete && i.loc!==OFFSITE_STORE);
   const low = stock.filter(i=>i.qty>0 && i.qty<=i.reorder);
   const out = stock.filter(i=>i.qty===0);
   const exp = stock.filter(i=>{const d=daysTo(i.expiry);return d!=null && d<=90;});
@@ -3047,7 +3062,7 @@ window._vSort = 'valueDesc';
 function valuesView(){
   const trackers = ['','consumables','meds','garments','linen'];
   const tf = window._vTracker||'';
-  let items = state.items.filter(i=>i.tracker!=='instruments' && !i.obsolete && i.loc!==OFFSITE_STORE &&
+  let items = state.items.filter(i=>i.tracker!=='instruments' && i.tracker!=='services' && !i.obsolete && i.loc!==OFFSITE_STORE &&
     (!tf || i.tracker===tf));
   const q = (window._vq||'').toLowerCase();
   if(q) items = items.filter(i=>i.name.toLowerCase().includes(q) || (i.supplier||'').toLowerCase().includes(q));
@@ -3411,6 +3426,192 @@ async function doMoveBackOffsite(){
       loadAll();
     }catch(err){ toast('Not saved — '+err.message); loadAll(); }
   }
+}
+
+/* ---------------- services (billable techniques) — admin only ---------------- */
+// A "service" is a technique like Renuvion or VASER: it needs a code and a price so it can be
+// added to a procedure's cart exactly like a consumable, but using it any number of times
+// never runs it out. Deliberately its own small page rather than reusing trackerView/tableFor
+// -- location, stores, stocktake and expiry don't mean anything for something with no
+// physical quantity, and qty=0 forever would otherwise misleadingly show as "out of stock"
+// everywhere the generic tracker machinery is reused.
+function servicesView(){
+  const q = (window._svcq||'').toLowerCase();
+  const list = state.items.filter(i=>i.tracker==='services' && !i.obsolete &&
+    (!q || i.name.toLowerCase().includes(q) || (i.code||'').toLowerCase().includes(q)))
+    .sort((a,b)=>a.name.localeCompare(b.name));
+  const rows = list.map(it=>{
+    const ix = state.items.indexOf(it);
+    return `<tr>
+      <td data-label=""><strong>${it.name}</strong></td>
+      <td class="code" data-label="Code">${it.code||'—'}</td>
+      <td class="qty" data-label="Invoice price">${it.billPrice!=null?'£'+Number(it.billPrice).toFixed(2):'—'}</td>
+      <td class="rowbtns" data-label=""><button onclick="openService(${ix})">Edit</button>
+        <button onclick="markObsolete(${ix})" style="color:var(--ink-soft)" title="Move to obsolete stock">Obsolete</button></td>
+    </tr>`;
+  }).join('');
+  return `<h1>Services</h1>
+    <div class="sub">Billable techniques (Renuvion, VASER, etc.) — added to a procedure's cart exactly like a consumable via the item picker, but using one never reduces a count. The price here is what's invoiced to the surgeon-group contract, separate from any purchase cost.</div>
+    <div class="toolrow">
+      <button class="btn primary" onclick="openService(null)">＋ Add service</button>
+      <input type="search" placeholder="Search name or code…" value="${window._svcq||''}" oninput="window._svcq=this.value;refreshServices()">
+    </div>
+    <div id="servicesWrap"><table><thead><tr><th>Service</th><th>Code</th><th class="qty">Invoice price</th><th></th></tr></thead>
+    <tbody>${rows||'<tr><td colspan="4" style="color:var(--ink-soft)">No services yet.</td></tr>'}</tbody></table></div>`;
+}
+function refreshServices(){
+  if(currentView!=='services') return;
+  const el = document.getElementById('servicesWrap');
+  if(!el) return;
+  const tmp = document.createElement('div');
+  tmp.innerHTML = servicesView();
+  const fresh = tmp.querySelector('#servicesWrap');
+  if(fresh) el.innerHTML = fresh.innerHTML;
+}
+let editService = null;
+function openService(ix){
+  editService = ix!=null ? state.items[ix] : null;
+  const s = editService || {};
+  $('#svcName').value = s.name||'';
+  $('#svcCode').value = s.code||'';
+  $('#svcPrice').value = s.billPrice!=null ? s.billPrice : '';
+  $('#svcDlgTitle').textContent = editService?'Edit service':'Add service';
+  $('#svcDlgSave').textContent = editService?'Save changes':'Add service';
+  serviceDlg.showModal();
+  $('#svcName').focus();
+}
+async function saveService(){
+  const name = $('#svcName').value.trim();
+  if(!name){ toast('Name is required'); return; }
+  const code = $('#svcCode').value.trim();
+  const priceRaw = $('#svcPrice').value;
+  const price = priceRaw===''?null:Number(priceRaw);
+  if(editService){
+    editService.name=name; editService.code=code; editService.billPrice=price;
+    serviceDlg.close(); render(); toast('Updated: '+name);
+    if(LIVE && editService._row){
+      try{ await api({action:'updateItem', tracker:'Services', row:editService._row, fields:{Name:name, Code:code, BillPrice:price}}); }
+      catch(err){ toast('Not saved — '+err.message); loadAll(); }
+    }
+    editService=null; return;
+  }
+  const newItem = {tracker:'services', _row:null, name, code, billPrice:price, qty:0, reorder:0, unit:'Use', cat:'', loc:'', supplier:'', obsolete:false};
+  state.items.push(newItem);
+  serviceDlg.close(); render(); toast('Service added: '+name);
+  if(LIVE){
+    try{
+      const row = await api({action:'addItem', tracker:'Services', fields:{Name:name, Code:code, BillPrice:price, Unit:'Use', Qty:0, ReorderLevel:0}});
+      newItem._row = row.row;
+    }catch(err){ toast('Not saved — '+err.message); loadAll(); }
+  }
+}
+
+/* ---------------- surgeon billing report — admin only ---------------- */
+// Every procedure_lines row with a captured bill_price (a rate-list item or a service, at the
+// price it was actually billed at when used -- not looked up live, so a later rate change
+// never rewrites a past invoice), joined back to its procedure. Fetched fresh per report run
+// (not from state.procLines, which getAll caps at 500 rows) via a dedicated RPC.
+let _billingRows = null;   // null = not yet generated; [] once run with no matches
+function billingReportView(){
+  const surgeons = state.surgeons||[];
+  return `<h1>Surgeon billing report</h1>
+    <div class="sub">Every rate-list item or billable service used in a procedure, with the price to invoice the surgeon-group contract — separate from the clinic's own internal procedure costing.</div>
+    <div class="toolrow">
+      <select id="billSurgeon">
+        <option value="">All surgeons</option>
+        ${surgeons.map(s=>`<option value="${s.id}">${s.name}</option>`).join('')}
+      </select>
+      <select id="billRange" onchange="$('#billCustom').style.display=this.value==='custom'?'flex':'none'">
+        <option value="week">This week</option>
+        <option value="month" selected>This month</option>
+        <option value="year">This year</option>
+        <option value="custom">Custom dates</option>
+      </select>
+      <span id="billCustom" style="display:none;gap:6px;align-items:center">
+        <input id="billFrom" type="date" style="padding:8px;border:1px solid var(--line);border-radius:8px">
+        <span>to</span>
+        <input id="billTo" type="date" style="padding:8px;border:1px solid var(--line);border-radius:8px">
+      </span>
+      <button class="btn primary" onclick="runBillingReport()">Generate report</button>
+      ${_billingRows && _billingRows.length?`<button class="btn" onclick="billingReportPDF()">Download PDF</button>`:''}
+    </div>
+    <div id="billingWrap">${billingReportBody()}</div>`;
+}
+function billingReportBody(){
+  if(_billingRows===null) return `<div class="sub">Choose a period and click Generate report.</div>`;
+  if(!_billingRows.length) return `<div class="sub">No billable items or services found for this period.</div>`;
+  const bySurgeon = {};
+  _billingRows.forEach(r=>{ const k = r.surgeon||'(no surgeon recorded)'; (bySurgeon[k]=bySurgeon[k]||[]).push(r); });
+  const grandTotal = _billingRows.reduce((s,r)=>s+(Number(r.bill_line_cost)||0),0);
+  const sections = Object.keys(bySurgeon).sort().map(surgeon=>{
+    const rows = bySurgeon[surgeon];
+    const subtotal = rows.reduce((s,r)=>s+(Number(r.bill_line_cost)||0),0);
+    const trs = rows.map(r=>`<tr>
+      <td data-label="Date">${new Date(r.date).toLocaleDateString('en-GB')}</td>
+      <td data-label="Procedure">${r.procedure_name||'—'}</td>
+      <td data-label="PAT">${r.patient_ref||'—'}</td>
+      <td data-label="Item / service">${r.item_name}</td>
+      <td class="qty" data-label="Qty">${r.qty}</td>
+      <td class="qty" data-label="Price">${r.bill_line_cost!=null?'£'+Number(r.bill_line_cost).toFixed(2):'—'}</td>
+    </tr>`).join('');
+    return `<h1 style="font-size:15px;margin-top:18px">${surgeon} <span style="color:var(--ink-soft);font-weight:600">— £${subtotal.toFixed(2)}</span></h1>
+      <table><thead><tr><th>Date</th><th>Procedure</th><th>PAT</th><th>Item / service</th><th class="qty">Qty</th><th class="qty">Price</th></tr></thead>
+      <tbody>${trs}</tbody></table>`;
+  }).join('');
+  return `${sections}<div class="sub" style="margin-top:14px"><strong>Grand total: £${grandTotal.toFixed(2)}</strong> across ${_billingRows.length} line(s)</div>`;
+}
+async function runBillingReport(){
+  const range = resolveRange('bill');
+  if(!range) return;
+  const surgeonId = $('#billSurgeon').value || null;
+  const el = document.getElementById('billingWrap');
+  if(el) el.innerHTML = '<div class="sub">Loading…</div>';
+  try{
+    const res = await api({action:'billingReport', from: range.from.toISOString().slice(0,10),
+      to: range.to.toISOString().slice(0,10), surgeonId});
+    _billingRows = res.rows||[];
+  }catch(err){ toast('Could not load report — '+err.message); _billingRows = []; }
+  render();
+}
+async function billingReportPDF(){
+  if(!_billingRows || !_billingRows.length){ toast('Nothing to export'); return; }
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({orientation:'landscape', unit:'mm', format:'a4'});
+  const W = doc.internal.pageSize.getWidth();
+  try{
+    const blob = await fetch('logo.png').then(x=>x.blob());
+    const dataUrl = await new Promise(res=>{const fr=new FileReader();fr.onload=()=>res(fr.result);fr.readAsDataURL(blob);});
+    const img = await new Promise(res=>{const i=new Image();i.onload=()=>res(i);i.onerror=()=>res(null);setTimeout(()=>res(null),1500);i.src=dataUrl;});
+    if(img) doc.addImage(dataUrl,'PNG',10,8,14*(img.width/img.height),14);
+  }catch(e){}
+  const grandTotal = _billingRows.reduce((s,r)=>s+(Number(r.bill_line_cost)||0),0);
+  doc.setFont('helvetica','bold'); doc.setFontSize(15); doc.setTextColor(43,97,104);
+  doc.text('Surgeon Billing Report', W-10, 13, {align:'right'});
+  doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(90,90,90);
+  doc.text(_billingRows.length + ' line(s) · Total £' + grandTotal.toFixed(2) + ' · Printed ' +
+    new Date().toLocaleString('en-GB') + (myName?' by '+myName:''), W-10, 18.5, {align:'right'});
+  doc.setDrawColor(176,138,62); doc.setLineWidth(0.8); doc.line(10, 22, W-10, 22);
+  const sorted = [...(_billingRows||[])].sort((a,b)=> (a.surgeon||'').localeCompare(b.surgeon||'') || new Date(a.date)-new Date(b.date));
+  doc.autoTable({
+    startY: 25, margin:{left:10,right:10},
+    head: [['Surgeon','Date','Procedure','PAT','Item / Service','Qty','Price']],
+    body: sorted.map(r=>[r.surgeon||'—', new Date(r.date).toLocaleDateString('en-GB'), r.procedure_name||'—',
+      r.patient_ref||'—', r.item_name, r.qty, r.bill_line_cost!=null?'£'+Number(r.bill_line_cost).toFixed(2):'—']),
+    theme:'grid',
+    styles:{font:'helvetica',fontSize:8,cellPadding:1.8,lineColor:[185,201,197],lineWidth:0.15,
+            textColor:[23,37,31],overflow:'linebreak',valign:'middle'},
+    headStyles:{fillColor:[43,97,104],textColor:255,fontSize:8,fontStyle:'bold'},
+    alternateRowStyles:{fillColor:[242,247,246]},
+    columnStyles:{0:{cellWidth:36},1:{cellWidth:22},2:{cellWidth:58},3:{cellWidth:20},
+      4:{cellWidth:50},5:{cellWidth:14},6:{cellWidth:22}},
+    didDrawPage: d => {
+      doc.setFontSize(7.5); doc.setTextColor(140,140,140);
+      doc.text('Bollin Clinic Stock Manager — Surgeon Billing', 10, doc.internal.pageSize.getHeight()-6);
+      doc.text('Page ' + d.pageNumber, W-10, doc.internal.pageSize.getHeight()-6, {align:'right'});
+    }
+  });
+  doc.save('Surgeon_Billing_Report_'+new Date().toISOString().slice(0,10)+'.pdf');
+  toast('Billing report PDF downloaded');
 }
 
 /* ---------------- gas room daily checks ---------------- */
@@ -4410,7 +4611,7 @@ function renderProcPicker(){
   // this makes it visible immediately instead of silently "not finding" items
   const cnt = {};
   pool.forEach(i=>{ cnt[i.tracker]=(cnt[i.tracker]||0)+1; });
-  const order = ['meds','consumables','garments','instruments','linen'];
+  const order = ['meds','consumables','garments','instruments','linen','services'];
   const missing = order.filter(t=>!cnt[t]);
   const noname = pool.filter(i=>!String(i.name||'').trim()).length;
   const hiddenObs = state.items.length - pool.length;
@@ -6243,8 +6444,8 @@ function render(){
   const v = currentView;
   const m = $('#main');
   if(v==='dashboard') m.innerHTML = dashboardView();
-  else if(v==='dash-low') m.innerHTML = listView('Low stock', i=>i.tracker!=='instruments'&&i.qty>0&&i.qty<=i.reorder);
-  else if(v==='dash-out') m.innerHTML = listView('Out of stock', i=>i.tracker!=='instruments'&&i.qty===0);
+  else if(v==='dash-low') m.innerHTML = listView('Low stock', i=>i.tracker!=='instruments'&&i.tracker!=='services'&&i.qty>0&&i.qty<=i.reorder);
+  else if(v==='dash-out') m.innerHTML = listView('Out of stock', i=>i.tracker!=='instruments'&&i.tracker!=='services'&&i.qty===0);
   else if(v==='dash-exp') m.innerHTML = listView('Expiring within 90 days', i=>{const d=daysTo(i.expiry);return d!=null&&d<=90;});
   else if(v==='log') m.innerHTML = logView();
   else if(v==='requests') m.innerHTML = requestsView();
@@ -6257,6 +6458,8 @@ function render(){
   else if(v==='obsolete') m.innerHTML = obsoleteView();
   else if(v==='stores') m.innerHTML = storesView();
   else if(v==='offsite') m.innerHTML = offsiteView();
+  else if(v==='services') m.innerHTML = servicesView();
+  else if(v==='billing') m.innerHTML = billingReportView();
   else if(v==='assets') m.innerHTML = assetsView();
   else if(v==='gas'){ m.innerHTML = gasView(); paintDeliv('o2'); paintDeliv('air'); }
   else if(v==='stickers') m.innerHTML = stickersView();
@@ -6305,7 +6508,7 @@ function itemToSheetRow(it){
     Supplier: it.supplier, Location: it.location, Unit: it.unit, Qty: it.qty, ReorderLevel: it.reorder_level,
     UnitCost: it.unit_cost, Expiry: it.expiry, Batch: it.batch, Notes: it.notes, Status: it.status,
     Obsolete: it.obsolete ? 'yes' : '', ObsoleteBy: it.obsolete_by, ObsoleteAt: it.obsolete_at,
-    QtyInTray: it.qty_in_tray, CyclesToDate: it.cycles_to_date};
+    QtyInTray: it.qty_in_tray, CyclesToDate: it.cycles_to_date, BillPrice: it.bill_price};
 }
 function fieldsToItemRow(f){
   f = f||{}; const out = {};
@@ -6327,6 +6530,7 @@ function fieldsToItemRow(f){
   if('ObsoleteBy' in f) out.obsolete_by = strOrNull(f.ObsoleteBy);
   if('ObsoleteAt' in f) out.obsolete_at = strOrNull(f.ObsoleteAt);
   if('QtyInTray' in f) out.qty_in_tray = numOrNull(f.QtyInTray);
+  if('BillPrice' in f) out.bill_price = numOrNull(f.BillPrice);
   return out;
 }
 function implantToSheetRow(m){
@@ -6452,7 +6656,7 @@ async function api(payload){
     });
     const role = profRes.data.role;
     const rank = ROLE_RANK[role]||0;
-    const items = {Consumables:[], Meds:[], Garments:[], Instruments:[], Linen:[]};
+    const items = {Consumables:[], Meds:[], Garments:[], Instruments:[], Linen:[], Services:[]};
     (itemsRes.data||[]).forEach(it=>{
       const tab = TRACKER_TAB[it.tracker]; if(!tab) return;
       const row = itemToSheetRow(it);
@@ -6582,6 +6786,14 @@ async function api(payload){
     const {data, error} = await sb.rpc('item_bulk_generate_barcodes', {p_item_ids: payload.rows});
     if(error) throw new Error(error.message);
     return {ok:true, barcodes: data.barcodes};
+  }
+  if(a==='billingReport'){
+    const {data, error} = await sb.rpc('billing_report', {p_from: payload.from||null, p_to: payload.to||null, p_surgeon_id: payload.surgeonId||null});
+    if(error) throw new Error(error.message);
+    return {ok:true, rows: (data||[]).map(r=>({procedure_id:r.procedure_id, date:r.date, surgeon:r.surgeon,
+      surgeon_id:r.surgeon_id, procedure_name:r.procedure_name, patient_ref:r.patient_ref,
+      item_name:r.item_name, tracker:r.tracker, qty:Number(r.qty)||0,
+      bill_price: r.bill_price==null?null:Number(r.bill_price), bill_line_cost: r.bill_line_cost==null?null:Number(r.bill_line_cost)}))};
   }
   if(a==='setBarcodes'){
     let done=0; const errors=[];
@@ -6895,7 +7107,8 @@ function mapItem(tab, r){
     obsBy: S(r.ObsoleteBy), obsAt: r.ObsoleteAt||'',
     remarks: S(r.Notes),
     qtyTray: r.QtyInTray!=null && r.QtyInTray!=='' ? Number(r.QtyInTray) : null,
-    cycles: Number(r.CyclesToDate)||0};
+    cycles: Number(r.CyclesToDate)||0,
+    billPrice: r.BillPrice!=null && r.BillPrice!=='' ? Number(r.BillPrice) : null};
 }
 
 async function loadAll(){
@@ -7134,6 +7347,10 @@ function viewAllowed(v){
   if(v==='obsolete') return can('obsolete');
   if(v==='stores') return can('stores');
   if(v==='offsite') return can('stores');
+  if(v==='services') return can('stores');
+  if(v==='billing') return isAdmin();   // contract pricing data -- deliberately stricter than
+    // Stock value (staff+ via can('values')); matches the admin+ gate already used for
+    // procedure financials, since this is the same class of sensitive information.
   if(v==='assets') return can('assets');
   if(v==='stickers') return can('sticker');
   if(v==='procedures') return true;   // all roles can run procedures (financials hidden inside)
