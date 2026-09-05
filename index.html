@@ -7348,9 +7348,7 @@ function viewAllowed(v){
   if(v==='stores') return can('stores');
   if(v==='offsite') return can('stores');
   if(v==='services') return can('stores');
-  if(v==='billing') return isAdmin();   // contract pricing data -- deliberately stricter than
-    // Stock value (staff+ via can('values')); matches the admin+ gate already used for
-    // procedure financials, since this is the same class of sensitive information.
+  if(v==='billing') return isSuperadmin();   // contract pricing data -- superadmin only
   if(v==='assets') return can('assets');
   if(v==='stickers') return can('sticker');
   if(v==='procedures') return true;   // all roles can run procedures (financials hidden inside)
