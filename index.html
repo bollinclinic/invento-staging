@@ -2607,6 +2607,18 @@ function stocktakeView(){
         ${stores.map(s=>`<option ${s===stk.store?'selected':''}>${s}</option>`).join('')}
       </select>
     </div>
+    ${isSuperadmin() ? `
+    <div class="toolrow" style="border-top:1px solid var(--line);padding-top:12px;margin-top:2px;flex-wrap:wrap">
+      <strong style="font-size:13px;color:var(--ink-soft)">Physical stock take sheet — every consumable, medicine, garment and linen item, to walk the clinic with pen and paper:</strong>
+    </div>
+    <div class="toolrow">
+      <label style="font-size:13px;display:flex;align-items:center;gap:6px">
+        <input type="checkbox" ${stkSheetGroupByStore?'checked':''} onchange="stkSheetGroupByStore=this.checked">
+        Group by store (A–Z within each)
+      </label>
+      <button class="btn" onclick="stockTakeSheetPDF()">🖨 Download PDF sheet</button>
+      <button class="btn" onclick="stockTakeSheetCSV()">Download CSV</button>
+    </div>` : ''}
     <div class="toolrow" style="justify-content:space-between">
       <span id="stkSummary" style="color:var(--ink-soft);font-size:13px"></span>
       <label style="font-size:13px;display:flex;align-items:center;gap:6px">
@@ -2713,6 +2725,99 @@ async function stkReportPDF(){
   });
   doc.save(stk.type.replace(/[^A-Za-z]/g,'')+'_Stocktake_'+new Date().toISOString().slice(0,10)+'.pdf');
   toast('Stocktake PDF downloaded');
+}
+
+/* ---------------- physical stock take sheet (superadmin/developer only) ---------------- */
+// A blank paper sheet to walk the clinic with pen and paper -- every physical-stock item
+// across all four countable trackers at once (not instruments, which live in the
+// sterilisation workflow with their own on-hand/history tracking, and not services, which
+// have no physical qty to count). Independent of the on-screen counting workflow above, which
+// needs a device in hand rather than a clipboard.
+let stkSheetGroupByStore = true;
+const STOCKTAKE_SHEET_TRACKERS = ['consumables','meds','garments','linen'];
+function stockTakeSheetGroups(){
+  const items = state.items.filter(i => STOCKTAKE_SHEET_TRACKERS.includes(i.tracker) && i.loc!==OFFSITE_STORE);
+  if(!stkSheetGroupByStore){
+    return [{store:null, items: items.slice().sort((a,b)=>a.name.localeCompare(b.name))}];
+  }
+  const byStore = {};
+  items.forEach(it=>{ const s = it.loc||'(No store set)'; (byStore[s]=byStore[s]||[]).push(it); });
+  return Object.keys(byStore).sort((a,b)=>a.localeCompare(b)).map(s=>({
+    store:s, items: byStore[s].slice().sort((a,b)=>a.name.localeCompare(b.name))
+  }));
+}
+async function stockTakeSheetPDF(){
+  if(!isSuperadmin()) return;
+  const groups = stockTakeSheetGroups();
+  const total = groups.reduce((n,g)=>n+g.items.length,0);
+  if(!total){ toast('No items to print'); return; }
+  if(typeof window.jspdf==='undefined'){ toast('PDF engine still loading — try again'); return; }
+  const { jsPDF } = window.jspdf;
+  // Portrait, not the usual landscape house style: at least 40 rows/page needs page HEIGHT
+  // (297mm portrait vs 210mm landscape), and the 8 columns here fit portrait's width fine.
+  const doc = new jsPDF({orientation:'portrait', unit:'mm', format:'a4'});
+  if(typeof doc.autoTable!=='function'){ toast('PDF table plugin failed to load — refresh and try again'); return; }
+  const W = doc.internal.pageSize.getWidth();
+  try{
+    const blob = await fetch('logo.png').then(x=>x.blob());
+    const dataUrl = await new Promise(res=>{const fr=new FileReader();fr.onload=()=>res(fr.result);fr.readAsDataURL(blob);});
+    const img = await new Promise(res=>{const i=new Image();i.onload=()=>res(i);i.onerror=()=>res(null);setTimeout(()=>res(null),1500);i.src=dataUrl;});
+    if(img) doc.addImage(dataUrl,'PNG',10,8,14*(img.width/img.height),14);
+  }catch(e){}
+  doc.setFont('helvetica','bold'); doc.setFontSize(15); doc.setTextColor(43,97,104);
+  doc.text('Physical Stock Take Sheet', W-10, 13, {align:'right'});
+  doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(90,90,90);
+  doc.text(total + ' item(s)' + (stkSheetGroupByStore?', grouped by store, A–Z':', A–Z') +
+    '  ·  Printed ' + new Date().toLocaleString('en-GB') + (myName?' by '+myName:''), W-10, 18.5, {align:'right'});
+  doc.setDrawColor(176,138,62); doc.setLineWidth(0.8); doc.line(10, 22, W-10, 22);
+
+  const body = [];
+  groups.forEach(g=>{
+    if(stkSheetGroupByStore){
+      body.push([{content:'Store: '+g.store, colSpan:8,
+        styles:{fillColor:[246,239,223], textColor:[122,90,20], fontStyle:'bold', halign:'left'}}]);
+    }
+    g.items.forEach(it=>{
+      body.push([it.name, TRACKER_LABEL[it.tracker]||it.tracker, it.supplier||'—', it.loc||'—',
+        it.expiry ? new Date(it.expiry).toLocaleDateString('en-GB') : '—',
+        it.qty+' '+it.unit, '', '']);
+    });
+  });
+
+  doc.autoTable({
+    startY: 25, margin:{left:10,right:10},
+    head: [['Item','Tracker','Supplier','Store','Expiry','Qty on hand','Tally','Total']],
+    body,
+    theme:'grid',
+    styles:{font:'helvetica',fontSize:7.5,cellPadding:1.4,lineColor:[185,201,197],lineWidth:0.15,
+            textColor:[23,37,31],overflow:'linebreak',valign:'middle'},
+    headStyles:{fillColor:[43,97,104],textColor:255,fontSize:7.5,fontStyle:'bold'},
+    alternateRowStyles:{fillColor:[242,247,246]},
+    columnStyles:{0:{cellWidth:44},1:{cellWidth:22},2:{cellWidth:28},3:{cellWidth:22},
+      4:{cellWidth:16,halign:'center'},5:{cellWidth:18,halign:'center'},
+      6:{cellWidth:24},7:{cellWidth:14}},
+    didDrawPage: d => {
+      doc.setFontSize(7.5); doc.setTextColor(140,140,140);
+      doc.text('Bollin Clinic Stock Manager — physical stock take', 10, doc.internal.pageSize.getHeight()-6);
+      doc.text('Page ' + d.pageNumber, W-10, doc.internal.pageSize.getHeight()-6, {align:'right'});
+    }
+  });
+  doc.save('Stock_Take_Sheet_'+new Date().toISOString().slice(0,10)+'.pdf');
+  toast('PDF downloaded');
+}
+function stockTakeSheetCSV(){
+  if(!isSuperadmin()) return;
+  const groups = stockTakeSheetGroups();
+  const rows = [];
+  groups.forEach(g=>{
+    g.items.forEach(it=>{
+      rows.push([it.name, TRACKER_LABEL[it.tracker]||it.tracker, it.supplier||'', it.loc||'',
+        it.expiry ? new Date(it.expiry).toLocaleDateString('en-GB') : '', it.qty+' '+it.unit, '', '']);
+    });
+  });
+  if(!rows.length){ toast('No items to export'); return; }
+  downloadCSV('Stock_Take_Sheet_'+new Date().toISOString().slice(0,10)+'.csv',
+    ['Item','Tracker','Supplier','Store','Expiry','Qty on hand','Tally','Total'], rows);
 }
 
 /* ---------------- add / edit item ---------------- */
