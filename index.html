@@ -4009,16 +4009,22 @@ function surgeonInputHTML(id, value, placeholder){
     <div id="${id}_dd" style="display:none;position:absolute;z-index:50;top:100%;left:0;right:0;background:var(--card);border:1px solid var(--line);border-radius:8px;margin-top:4px;max-height:220px;overflow-y:auto;box-shadow:0 8px 20px rgba(0,0,0,.15)"></div>
   </div>`;
 }
+// Staff have years of muscle memory typing "Mr <Surname>" (that's exactly the habit that
+// caused the original mess of 23 raw strings for 19 real surgeons) -- canonical names carry
+// no title, so "Mr Elamari" never appears as a literal substring of "Sherif Elamari". Strip a
+// leading title from the typed text before matching, so the habit staff already have finds
+// the right existing person instead of falling through to "add new".
+function surgeonStripTitle(s){ return String(s||'').trim().toLowerCase().replace(/^(mr|mrs|miss|ms|dr)\.?\s+/,'').trim(); }
 function surgeonPickerInput(id){
   const el = document.getElementById(id), dd = document.getElementById(id+'_dd');
   if(!el || !dd) return;
-  const raw = el.value.trim(), q = raw.toLowerCase();
+  const raw = el.value.trim(), q = raw.toLowerCase(), qStripped = surgeonStripTitle(raw);
   window._surgeonPick[id] = null;   // any edit invalidates a previous pick until re-resolved below
   if(q.length < 3){ dd.style.display='none'; return; }
   const all = state.surgeons||[];
-  const exact = all.find(s=>s.name.toLowerCase()===q);
+  const exact = all.find(s=>{ const n=s.name.toLowerCase(); return n===q || n===qStripped; });
   if(exact) window._surgeonPick[id] = exact;
-  const matches = all.filter(s=>s.name.toLowerCase().includes(q)).slice(0,8);
+  const matches = all.filter(s=>{ const n=s.name.toLowerCase(); return n.includes(q) || (qStripped && n.includes(qStripped)); }).slice(0,8);
   let html;
   if(matches.length){
     html = matches.map(s=>`<div style="padding:9px 12px;cursor:pointer" onmousedown="surgeonPickerChoose('${id}','${s.id}')">${s.name}</div>`).join('');
