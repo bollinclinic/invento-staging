@@ -3996,14 +3996,80 @@ function procView(){
 }
 function procSwitchRoom(r){ if(PROC_ROOMS.indexOf(r)>=0){ _procRoom=r; procSyncActive(); render(); } }
 
+/* ---- surgeon picker: type-ahead against the real surgeons roster, with an explicit
+   "add new" step on no match, instead of a plain free-text box. Attach to any input by id;
+   the resolved {id,name} (or null if unresolved) is tracked in window._surgeonPick[id]. ---- */
+window._surgeonPick = {};
+function surgeonInputHTML(id, value, placeholder){
+  return `<div style="position:relative">
+    <input id="${id}" type="text" value="${String(value||'').replace(/"/g,'&quot;')}" placeholder="${placeholder||'Type 3+ letters…'}"
+      autocomplete="off" oninput="surgeonPickerInput('${id}')" onfocus="surgeonPickerInput('${id}')"
+      onblur="setTimeout(()=>surgeonPickerBlur('${id}'),150)"
+      style="width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:9px">
+    <div id="${id}_dd" style="display:none;position:absolute;z-index:50;top:100%;left:0;right:0;background:var(--card);border:1px solid var(--line);border-radius:8px;margin-top:4px;max-height:220px;overflow-y:auto;box-shadow:0 8px 20px rgba(0,0,0,.15)"></div>
+  </div>`;
+}
+function surgeonPickerInput(id){
+  const el = document.getElementById(id), dd = document.getElementById(id+'_dd');
+  if(!el || !dd) return;
+  const raw = el.value.trim(), q = raw.toLowerCase();
+  window._surgeonPick[id] = null;   // any edit invalidates a previous pick until re-resolved below
+  if(q.length < 3){ dd.style.display='none'; return; }
+  const all = state.surgeons||[];
+  const exact = all.find(s=>s.name.toLowerCase()===q);
+  if(exact) window._surgeonPick[id] = exact;
+  const matches = all.filter(s=>s.name.toLowerCase().includes(q)).slice(0,8);
+  let html;
+  if(matches.length){
+    html = matches.map(s=>`<div style="padding:9px 12px;cursor:pointer" onmousedown="surgeonPickerChoose('${id}','${s.id}')">${s.name}</div>`).join('');
+  } else {
+    html = `<div style="padding:9px 12px;cursor:pointer;color:var(--pine);font-weight:600" onmousedown="surgeonPickerAddNew('${id}')">＋ Add new surgeon: "${raw.replace(/"/g,'&quot;')}"</div>`;
+  }
+  dd.innerHTML = html;
+  dd.style.display = 'block';
+}
+function surgeonPickerChoose(id, surgeonId){
+  const el = document.getElementById(id), dd = document.getElementById(id+'_dd');
+  const s = (state.surgeons||[]).find(x=>x.id===surgeonId);
+  if(!el || !s) return;
+  el.value = s.name;
+  window._surgeonPick[id] = s;
+  if(dd) dd.style.display = 'none';
+}
+async function surgeonPickerAddNew(id){
+  const el = document.getElementById(id), dd = document.getElementById(id+'_dd');
+  const name = el ? el.value.trim() : '';
+  if(!name) return;
+  if(!confirm('Add "'+name+'" as a new surgeon?')) return;
+  try{
+    const s = await addSurgeon(name);
+    el.value = s.name;
+    window._surgeonPick[id] = s;
+    if(dd) dd.style.display = 'none';
+    toast('Added new surgeon: '+s.name);
+  }catch(err){ toast('Could not add surgeon — '+err.message); }
+}
+function surgeonPickerBlur(id){
+  const dd = document.getElementById(id+'_dd');
+  if(dd) dd.style.display = 'none';
+}
+async function addSurgeon(name){
+  state.surgeons = state.surgeons||[];
+  if(!LIVE){ const fake = {id:'local-'+Date.now(), name}; state.surgeons.push(fake); return fake; }
+  const res = await api({action:'surgeonAdd', name});
+  const s = {id:res.id, name};
+  state.surgeons.push(s);
+  state.surgeons.sort((a,b)=>a.name.localeCompare(b.name));
+  return s;
+}
+
 function procStartPanel(open){
   return `
     <div class="gaspanel">
       <h2><span class="led amber"></span>Start a new procedure</h2>
       <div class="steprow" style="align-items:end">
-        <div class="fld"><label>Surgeon</label>
-          <input id="pcSurgeon" type="text" placeholder="e.g. Mr James Fletcher"
-            style="padding:10px 12px;border:1px solid var(--line);border-radius:9px;min-width:200px"></div>
+        <div class="fld" style="min-width:220px"><label>Surgeon</label>
+          ${surgeonInputHTML('pcSurgeon','','e.g. Aftab Siddiqui')}</div>
         <div class="fld"><label>Procedure</label>
           <input id="pcProc" type="text" placeholder="e.g. Breast augmentation"
             style="padding:10px 12px;border:1px solid var(--line);border-radius:9px;min-width:200px"></div>
@@ -4267,6 +4333,7 @@ function procHistoryPanel(){
 
 async function startProc(){
   const surgeon = $('#pcSurgeon').value.trim();
+  const surgeonId = window._surgeonPick['pcSurgeon'] ? window._surgeonPick['pcSurgeon'].id : null;
   const procedure = $('#pcProc').value.trim();
   const date = $('#pcDate').value || todayISO();
   const patientRef = $('#pcRef').value.trim();
@@ -4274,13 +4341,14 @@ async function startProc(){
   if(_procByRoom[_procRoom]){ toast(_procRoom+' already has a case running'); return; }
   const room = _procRoom;
   const localId = 'PROC-LOCAL-' + Date.now();
-  _procByRoom[room] = {procedureId:localId, surgeon, procedure, date, patientRef, room, status:'Open', totalCost:0, by:myName||''};
+  _procByRoom[room] = {procedureId:localId, surgeon, surgeonId, procedure, date, patientRef, room, status:'Open', totalCost:0, by:myName||''};
   state.procedures.push(_procByRoom[room]);
   procSyncActive();
+  window._surgeonPick['pcSurgeon'] = null;
   render(); toast(room+': procedure started — scan items to consume');
   if(LIVE){
     try{
-      const res = await api({action:'procStart', surgeon, procedure, date, patientRef, room, by:myName||''});
+      const res = await api({action:'procStart', surgeon, surgeonId, procedure, date, patientRef, room, by:myName||''});
       if(res.procedureId){ _procByRoom[room].procedureId = res.procedureId; }
     }catch(err){ toast('Not saved — '+err.message); }
   }
@@ -6359,7 +6427,7 @@ async function api(payload){
     const { data: userData } = await sb.auth.getUser();
     if(!userData || !userData.user) throw new Error('NOT_SIGNED_IN');
     const [itemsRes, txRes, reqRes, alertRes, impRes, dispRes, storesRes, gasRes, setRes,
-           profRes, sampRes] = await Promise.all([
+           profRes, sampRes, surgRes] = await Promise.all([
       sb.rpc('get_items'),
       sb.from('activity_log').select('*').order('ts',{ascending:false}).limit(200),
       sb.from('stock_requests').select('*').order('requested_at',{ascending:false}),
@@ -6370,9 +6438,10 @@ async function api(payload){
       sb.from('gas_checks').select('*').order('ts',{ascending:false}).limit(180),
       sb.from('settings').select('*'),
       sb.from('profiles').select('id,username,display_name,role').eq('id',userData.user.id).single(),
-      sb.from('specimens').select('*, sample_collections(*)').order('created_at',{ascending:false})
+      sb.from('specimens').select('*, sample_collections(*)').order('created_at',{ascending:false}),
+      sb.from('surgeons').select('id,name').order('name',{ascending:true})
     ]);
-    [itemsRes,txRes,reqRes,alertRes,impRes,dispRes,storesRes,gasRes,setRes,profRes,sampRes].forEach(r=>{
+    [itemsRes,txRes,reqRes,alertRes,impRes,dispRes,storesRes,gasRes,setRes,profRes,sampRes,surgRes].forEach(r=>{
       if(r.error) throw new Error(r.error.message);
     });
     const role = profRes.data.role;
@@ -6388,7 +6457,7 @@ async function api(payload){
     {
       const {data: procData, error: procErr} = await sb.rpc('get_procedures');
       if(procErr) throw new Error(procErr.message);
-      procedures = (procData||[]).map(p=>({ProcedureID:p.id, Date:p.date, Surgeon:p.surgeon,
+      procedures = (procData||[]).map(p=>({ProcedureID:p.id, Date:p.date, Surgeon:p.surgeon, SurgeonId:p.surgeon_id,
         Procedure:p.procedure_name, PatientRef:p.patient_ref, StartedBy:p.started_by, Status:p.status,
         StartTime:p.start_time, EndTime:p.end_time, TotalCost:p.total_cost, Notes:p.notes,
         CartJSON: JSON.stringify(p.cart||[]), Room:p.room}));
@@ -6453,7 +6522,7 @@ async function api(payload){
       assets, gasChecks: (gasRes.data||[]).map(gasToSheetRow),
       settings: (setRes.data||[]).map(s=>({Key:s.key, Value:s.value, Description:s.description})),
       procedures, procLines, users,
-      rota, samples, serverTime: new Date().toISOString()};
+      rota, samples, surgeons: surgRes.data||[], serverTime: new Date().toISOString()};
   }
 
   if(a==='getTransactions'){
@@ -6684,9 +6753,15 @@ async function api(payload){
 
   if(a==='procStart'){
     const {data, error} = await sb.rpc('proc_start', {p_date: payload.date, p_surgeon: strOrNull(payload.surgeon),
-      p_procedure_name: strOrNull(payload.procedure), p_patient_ref: strOrNull(payload.patientRef), p_room: payload.room});
+      p_procedure_name: strOrNull(payload.procedure), p_patient_ref: strOrNull(payload.patientRef), p_room: payload.room,
+      p_surgeon_id: payload.surgeonId||null});
     if(error) throw new Error(error.message);
     return {ok:true, procedureId: data.id};
+  }
+  if(a==='surgeonAdd'){
+    const {data, error} = await sb.from('surgeons').insert({name: payload.name}).select('id').single();
+    if(error) throw new Error(error.message);
+    return {ok:true, id: data.id};
   }
   if(a==='procSaveCart'){
     const {error} = await sb.rpc('proc_save_cart', {p_procedure_id: payload.procedureId, p_cart: payload.cart});
@@ -6712,7 +6787,7 @@ async function api(payload){
     const {error} = await sb.rpc('proc_update_meta', {p_procedure_id: payload.procedureId,
       p_date: payload.date, p_surgeon: strOrNull(payload.surgeon),
       p_procedure_name: strOrNull(payload.procedure), p_patient_ref: strOrNull(payload.patientRef),
-      p_room: strOrNull(payload.room)});
+      p_room: strOrNull(payload.room), p_surgeon_id: payload.surgeonId||null});
     if(error) throw new Error(error.message);
     return {ok:true};
   }
@@ -6886,10 +6961,11 @@ async function loadAll(){
     Object.keys(_procByRoom).forEach(room=>{ const p=_procByRoom[room];
       if(p) _liveByRoom[room] = { id:p.procedureId, cart:(p._cart||[]), local:String(p.procedureId).startsWith('PROC-LOCAL') , obj:p }; });
     state.procedures = (data.procedures||[]).map(p=>({procedureId:p.ProcedureID||'', date:p.Date||'',
-      surgeon:p.Surgeon||'', procedure:p.Procedure||'', patientRef:p.PatientRef||'', startedBy:p.StartedBy||'',
+      surgeon:p.Surgeon||'', surgeonId:p.SurgeonId||null, procedure:p.Procedure||'', patientRef:p.PatientRef||'', startedBy:p.StartedBy||'',
       status:p.Status||'Open', startTime:p.StartTime||'', endTime:p.EndTime||'',
       totalCost:p.TotalCost===''||p.TotalCost==null?0:Number(p.TotalCost), notes:p.Notes||'',
       room:p.Room||'', cartJSON:p.CartJSON||''}));
+    state.surgeons = (data.surgeons||[]).map(s=>({id:s.id, name:s.name}));
     state.procLines = (data.procLines||[]).map(l=>({procedureId:l.ProcedureID||'', ts:l.Timestamp,
       tracker:(l.Tracker||'').toLowerCase(), code:l.Code||'', name:l.Name||'',
       qty:Number(l.Qty)||0, unitCost:l.UnitCost===''||l.UnitCost==null?'':Number(l.UnitCost),
