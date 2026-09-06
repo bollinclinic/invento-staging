@@ -6794,6 +6794,29 @@ async function twFindRowByPid(pid){
   return { rows, idx };
 }
 function twVal(id){ const el = document.getElementById(id); return el ? el.value : ''; }
+// Excel stores real dates/times as numbers (serial days since 1899-12-30, and a fraction of a
+// day, respectively) once Graph API's rows/add recognises a written string as a date/time --
+// confirmed live: sending '2026-09-06'/'09:15' as plain text comes back as 46271/0.385416... on
+// the next read, not as the original text. That conversion is actually wanted (it's what lets
+// the sheet's own calculated columns, e.g. Duration, work), but it means any value read back
+// from the sheet has to be converted back to a plain date/time-input-friendly string before
+// it's used to pre-fill a form -- otherwise <input type="date"|"time"> just renders blank.
+const TW_DATE_COLS = new Set([TW_COL.date, TW_COL.dob, TW_COL.dateDischarge]);
+const TW_TIME_COLS = new Set([TW_COL.timeSent, TW_COL.intoTheatre, TW_COL.anaStarted, TW_COL.anaReady,
+  TW_COL.knifeToSkin, TW_COL.finishedSuturing, TW_COL.intoRecovery, TW_COL.outRecovery, TW_COL.intoWard, TW_COL.timeDischarge]);
+function twExcelDateToISO(v){ return new Date(Math.round((v-25569)*86400*1000)).toISOString().slice(0,10); }
+function twExcelTimeToHHMM(v){
+  const totalMin = Math.round(v*24*60);
+  return String(Math.floor(totalMin/60)%24).padStart(2,'0')+':'+String(totalMin%60).padStart(2,'0');
+}
+function twCellDisplay(col, raw){
+  if(raw==null || raw==='') return '';
+  if(typeof raw==='number'){
+    if(TW_DATE_COLS.has(col)) return twExcelDateToISO(raw);
+    if(TW_TIME_COLS.has(col)) return twExcelTimeToHHMM(raw);
+  }
+  return String(raw);
+}
 // A surgeon name typed here must come from the shared surgeon picker -- EXCEPT an unchanged
 // value already sitting in an existing sheet row (older data entered before this picker
 // existed, or entered elsewhere) is let through as-is, so editing an unrelated field on an old
@@ -6925,7 +6948,7 @@ async function twSubmitWard(){
 
 function twTheatreFormHtml(){
   const r = twLoadedRow;
-  const g = (col) => r ? (r[col]||'') : '';
+  const g = (col) => r ? twCellDisplay(col, r[col]) : '';
   const pidVal = r ? g(TW_COL.pid) : twPrefillPid;
   const surgeonVal = r ? g(TW_COL.surgeonName) : '';
   return `
@@ -6983,7 +7006,7 @@ function twWardFormHtml(){
   if(!r){
     return `<div class="gaspanel"><div class="sub" style="margin:0">Look up a patient by ID above — the theatre record must already exist before ward times can be added.</div></div>`;
   }
-  const g = (col) => r[col]||'';
+  const g = (col) => twCellDisplay(col, r[col]);
   const field = (label,val) => `<div><div style="font-size:12px;color:var(--ink-soft)">${label}</div><strong>${val||'—'}</strong></div>`;
   return `
     <div class="gaspanel">
