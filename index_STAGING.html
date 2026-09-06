@@ -4462,11 +4462,11 @@ function procSwitchRoom(r){ if(PROC_ROOMS.indexOf(r)>=0){ _procRoom=r; procSyncA
    "add new" step on no match, instead of a plain free-text box. Attach to any input by id;
    the resolved {id,name} (or null if unresolved) is tracked in window._surgeonPick[id]. ---- */
 window._surgeonPick = {};
-function surgeonInputHTML(id, value, placeholder){
+function surgeonInputHTML(id, value, placeholder, onCommit){
   return `<div style="position:relative">
     <input id="${id}" type="text" value="${String(value||'').replace(/"/g,'&quot;')}" placeholder="${placeholder||'Type 3+ letters…'}"
       autocomplete="off" oninput="surgeonPickerInput('${id}')" onfocus="surgeonPickerInput('${id}')"
-      onblur="setTimeout(()=>surgeonPickerBlur('${id}'),150)"
+      onblur="setTimeout(()=>surgeonPickerBlur('${id}'),150)${onCommit?';'+onCommit:''}"
       style="width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:9px">
     <div id="${id}_dd" style="display:none;position:absolute;z-index:50;top:100%;left:0;right:0;background:var(--card);border:1px solid var(--line);border-radius:8px;margin-top:4px;max-height:220px;overflow-y:auto;box-shadow:0 8px 20px rgba(0,0,0,.15)"></div>
   </div>`;
@@ -6768,6 +6768,42 @@ let twLoadedRow = null;          // the 22-value array from the sheet, once a lo
 let twPrefillPid = '';           // searched PID with no existing record -- carried into the form
 let twStatus = {level:'amber', text:'No patient selected — search by ID, or fill in a new theatre record'};
 
+// Unsaved-draft safety net -- switching to another tab and back (or an accidental reload) used
+// to lose everything typed into a not-yet-saved record, since these fields were only ever read
+// at submit time. Mirrors the same protection procedure costing's cart already has ("a refresh
+// or crash loses nothing") -- kept in memory AND in localStorage (this is browser-local, not
+// server-saved like the cart, since there's no "save draft" call on the Worker; it survives a
+// reload/crash on the SAME device, not a switch to a different one). Any field change re-saves
+// it; a fresh lookup, a role switch, the "New / clear form" button, or a successful save all
+// clear it, so it can never bleed from one patient into a different one.
+let twDraft = {};
+try{ twDraft = JSON.parse(localStorage.getItem('bollin_tw_draft')||'{}') || {}; }catch(e){ twDraft = {}; }
+const TW_DRAFT_FIELDS = ['tw_date','tw_theatreNumber','tw_proposedOrder','tw_actualList','tw_pid','tw_patientName','tw_dob',
+  'tw_procedure','tw_anaesthetistName','tw_anaestheticType','tw_timeSent','tw_intoTheatre','tw_anaStarted','tw_anaReady',
+  'tw_knifeToSkin','tw_finishedSuturing','tw_intoRecovery','tw_outRecovery','tw_intoWard','tw_timeDischarge','tw_dateDischarge'];
+const TW_COL_TO_ID = {}; Object.keys(TW_COL).forEach(k => { TW_COL_TO_ID[TW_COL[k]] = (k==='surgeonName' ? 'twSurgeon' : 'tw_'+k); });
+function twSaveDraft(){
+  const d = {};
+  TW_DRAFT_FIELDS.forEach(id=>{ const el=document.getElementById(id); if(el) d[id]=el.value; });
+  const surgeonEl = document.getElementById('twSurgeon');
+  if(surgeonEl){ d.twSurgeon = surgeonEl.value; const p = window._surgeonPick['twSurgeon']; d.twSurgeonPick = p ? {id:p.id, name:p.name} : null; }
+  twDraft = d;
+  try{ localStorage.setItem('bollin_tw_draft', JSON.stringify(d)); }catch(e){}
+}
+function twClearDraft(){
+  twDraft = {};
+  try{ localStorage.removeItem('bollin_tw_draft'); }catch(e){}
+}
+// A field change (draft) always wins over the last-loaded record, so an in-progress edit to an
+// existing patient survives a tab switch exactly like a brand new entry does; only a fresh
+// lookup/reset/save clears the draft and lets the loaded record show through again.
+function twFieldValue(col){
+  const id = TW_COL_TO_ID[col];
+  if(twDraft[id]!=null) return twDraft[id];
+  if(twLoadedRow) return twCellDisplay(col, twLoadedRow[col]);
+  return '';
+}
+
 async function twGetRows(){
   const resp = await fetch(THEATRE_WORKER_URL + '?action=getRows');
   const data = await resp.json();
@@ -6834,6 +6870,7 @@ function twStatusBadgeClass(level){ return level==='green'?'b-ok':level==='red'?
 
 function twSwitchRole(role){
   twRole = role; twCurrentPid = null; twLoadedRow = null; twPrefillPid = '';
+  twClearDraft();
   twStatus = {level:'amber', text:'No patient selected — search by ID'+(role==='theatre'?', or fill in a new record':'')};
   render();
 }
@@ -6842,6 +6879,10 @@ function twResetForm(){ twSwitchRole(twRole); }
 async function twLookupPatient(){
   const pid = twVal('twPidLookup').trim();
   if(!pid){ toast('Enter a Patient ID to search'); return; }
+  // Only wipe an in-progress draft if this lookup is for a DIFFERENT patient -- re-checking
+  // the same PID you're already mid-typing (e.g. "does this one already exist?") must not
+  // throw away what you've just entered.
+  if(twDraft.tw_pid && twDraft.tw_pid.trim() !== pid) twClearDraft();
   const el = document.getElementById('twStatusWrap');
   if(el) el.innerHTML = '<span class="badge b-low">Searching…</span>';
   try{
@@ -6863,6 +6904,9 @@ async function twLookupPatient(){
     twStatus = {level:'red', text:err.message};
     toast('Lookup failed — '+err.message);
   }
+  // A surviving draft for this same PID (see above) still wins over whatever the row itself
+  // says for the surgeon pick, matching twFieldValue's draft-first priority for every other field.
+  if(twDraft.tw_pid===pid && 'twSurgeonPick' in twDraft) window._surgeonPick['twSurgeon'] = twDraft.twSurgeonPick;
   render();
 }
 
@@ -6912,6 +6956,7 @@ async function twSubmitTheatre(){
       await twAddRow(rowData);
     }
     twCurrentPid = pid; twLoadedRow = rowData; twPrefillPid = '';
+    twClearDraft();
     twStatus = {level:'green', text:'Theatre record '+(isNew?'created':'updated')+' for '+(twVal('tw_patientName')||pid)};
     toast(isNew ? '✓ New theatre record saved' : '✓ Theatre record updated');
   }catch(err){
@@ -6937,6 +6982,7 @@ async function twSubmitWard(){
     rowData[TW_COL.dateDischarge] = twVal('tw_dateDischarge');
     await twUpdateRow(rows[idx].index, rowData);
     twLoadedRow = rowData;
+    twClearDraft();
     twStatus = {level:'green', text:'Ward record saved — record complete'};
     toast('✓ Ward record saved');
   }catch(err){
@@ -6948,42 +6994,44 @@ async function twSubmitWard(){
 
 function twTheatreFormHtml(){
   const r = twLoadedRow;
-  const g = (col) => r ? twCellDisplay(col, r[col]) : '';
-  const pidVal = r ? g(TW_COL.pid) : twPrefillPid;
-  const surgeonVal = r ? g(TW_COL.surgeonName) : '';
+  const g = twFieldValue;
+  const pidVal = g(TW_COL.pid) || (r ? '' : twPrefillPid);
+  const surgeonVal = g(TW_COL.surgeonName);
+  const chg = ' onchange="twSaveDraft()"';
   return `
+    ${(twDraft.tw_pid)?`<div class="sub" style="color:var(--amber)">Showing an unsaved draft you were working on — nothing has been lost.</div>`:''}
     <div class="gaspanel">
       <h2>Theatre record</h2>
       <div class="steprow">
-        <div class="fld"><label>Date</label><input id="tw_date" type="date" value="${g(TW_COL.date)}"
+        <div class="fld"><label>Date</label><input id="tw_date" type="date" value="${g(TW_COL.date)}"${chg}
           style="padding:10px 12px;border:1px solid var(--line);border-radius:9px"></div>
-        <div class="fld"><label>Theatre / Room</label><select id="tw_theatreNumber"
+        <div class="fld"><label>Theatre / Room</label><select id="tw_theatreNumber"${chg}
           style="padding:10px 12px;border:1px solid var(--line);border-radius:9px">
           <option value=""></option>${TW_ROOMS.map(room=>`<option ${g(TW_COL.theatreNumber)===room?'selected':''}>${room}</option>`).join('')}</select></div>
-        <div class="fld"><label>Proposed list order</label><select id="tw_proposedOrder"
+        <div class="fld"><label>Proposed list order</label><select id="tw_proposedOrder"${chg}
           style="padding:10px 12px;border:1px solid var(--line);border-radius:9px">
           <option value=""></option>${Array.from({length:10},(_,i)=>i+1).map(n=>`<option ${String(g(TW_COL.proposedOrder))===String(n)?'selected':''}>${n}</option>`).join('')}</select></div>
-        <div class="fld"><label>Actual list order</label><select id="tw_actualList"
+        <div class="fld"><label>Actual list order</label><select id="tw_actualList"${chg}
           style="padding:10px 12px;border:1px solid var(--line);border-radius:9px">
           <option value=""></option>${Array.from({length:10},(_,i)=>i+1).map(n=>`<option ${String(g(TW_COL.actualList))===String(n)?'selected':''}>${n}</option>`).join('')}</select></div>
       </div>
       <div class="steprow">
-        <div class="fld"><label>Patient ID number *</label><input id="tw_pid" type="text" value="${String(pidVal).replace(/"/g,'&quot;')}"
+        <div class="fld"><label>Patient ID number *</label><input id="tw_pid" type="text" value="${String(pidVal).replace(/"/g,'&quot;')}"${chg}
           style="padding:10px 12px;border:1px solid var(--line);border-radius:9px"></div>
-        <div class="fld"><label>Patient name</label><input id="tw_patientName" type="text" value="${String(g(TW_COL.patientName)).replace(/"/g,'&quot;')}"
+        <div class="fld"><label>Patient name</label><input id="tw_patientName" type="text" value="${String(g(TW_COL.patientName)).replace(/"/g,'&quot;')}"${chg}
           style="padding:10px 12px;border:1px solid var(--line);border-radius:9px"></div>
-        <div class="fld"><label>Date of birth</label><input id="tw_dob" type="date" value="${g(TW_COL.dob)}"
+        <div class="fld"><label>Date of birth</label><input id="tw_dob" type="date" value="${g(TW_COL.dob)}"${chg}
           style="padding:10px 12px;border:1px solid var(--line);border-radius:9px"></div>
       </div>
       <div class="steprow">
-        <div class="fld" style="flex:1;min-width:260px"><label>Procedure</label><input id="tw_procedure" type="text" value="${String(g(TW_COL.procedure)).replace(/"/g,'&quot;')}"
+        <div class="fld" style="flex:1;min-width:260px"><label>Procedure</label><input id="tw_procedure" type="text" value="${String(g(TW_COL.procedure)).replace(/"/g,'&quot;')}"${chg}
           style="width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:9px"></div>
       </div>
       <div class="steprow">
-        <div class="fld" style="min-width:220px"><label>Surgeon</label>${surgeonInputHTML('twSurgeon', surgeonVal, 'e.g. Aftab Siddiqui')}</div>
-        <div class="fld"><label>Anaesthetist name</label><input id="tw_anaesthetistName" type="text" value="${String(g(TW_COL.anaesthetistName)).replace(/"/g,'&quot;')}"
+        <div class="fld" style="min-width:220px"><label>Surgeon</label>${surgeonInputHTML('twSurgeon', surgeonVal, 'e.g. Aftab Siddiqui', 'twSaveDraft()')}</div>
+        <div class="fld"><label>Anaesthetist name</label><input id="tw_anaesthetistName" type="text" value="${String(g(TW_COL.anaesthetistName)).replace(/"/g,'&quot;')}"${chg}
           style="padding:10px 12px;border:1px solid var(--line);border-radius:9px"></div>
-        <div class="fld"><label>Anaesthetic type</label><select id="tw_anaestheticType"
+        <div class="fld"><label>Anaesthetic type</label><select id="tw_anaestheticType"${chg}
           style="padding:10px 12px;border:1px solid var(--line);border-radius:9px">
           <option value=""></option>${TW_ANAESTHETIC_TYPES.map(t=>`<option ${g(TW_COL.anaestheticType)===t?'selected':''}>${t}</option>`).join('')}</select></div>
       </div>
@@ -6994,7 +7042,7 @@ function twTheatreFormHtml(){
         ${[['timeSent','Time sent'],['intoTheatre','Into theatre'],['anaStarted','Anaesthetic started'],
            ['anaReady','Anaesthetic ready'],['knifeToSkin','Knife to skin'],['finishedSuturing','Finished suturing'],
            ['intoRecovery','Into recovery']].map(([key,label])=>`
-        <div class="fld"><label>${label}</label><input id="tw_${key}" type="time" value="${g(TW_COL[key])}"
+        <div class="fld"><label>${label}</label><input id="tw_${key}" type="time" value="${g(TW_COL[key])}"${chg}
           style="padding:10px 12px;border:1px solid var(--line);border-radius:9px"></div>`).join('')}
       </div>
       <button class="btn primary" id="twTheatreSaveBtn" onclick="twSubmitTheatre()" style="margin-top:6px">Save Theatre Record</button>
@@ -7006,30 +7054,33 @@ function twWardFormHtml(){
   if(!r){
     return `<div class="gaspanel"><div class="sub" style="margin:0">Look up a patient by ID above — the theatre record must already exist before ward times can be added.</div></div>`;
   }
-  const g = (col) => twCellDisplay(col, r[col]);
+  const rg = (col) => twCellDisplay(col, r[col]);   // read-only summary -- always the actual saved record, never a draft
+  const g = twFieldValue;                            // editable ward fields -- draft-first, same as the theatre form
+  const chg = ' onchange="twSaveDraft()"';
   const field = (label,val) => `<div><div style="font-size:12px;color:var(--ink-soft)">${label}</div><strong>${val||'—'}</strong></div>`;
   return `
+    ${(twDraft.tw_pid===String(rg(TW_COL.pid)))?`<div class="sub" style="color:var(--amber)">Showing an unsaved draft you were working on — nothing has been lost.</div>`:''}
     <div class="gaspanel">
       <h2>Patient (from theatre record — read-only)</h2>
       <div style="display:flex;flex-wrap:wrap;gap:22px">
-        ${field('Patient ID', g(TW_COL.pid))}
-        ${field('Patient name', g(TW_COL.patientName))}
-        ${field('Date of birth', g(TW_COL.dob) ? new Date(g(TW_COL.dob)).toLocaleDateString('en-GB') : '')}
-        ${field('Procedure', g(TW_COL.procedure))}
-        ${field('Surgeon', g(TW_COL.surgeonName))}
-        ${field('Anaesthetist', g(TW_COL.anaesthetistName))}
+        ${field('Patient ID', rg(TW_COL.pid))}
+        ${field('Patient name', rg(TW_COL.patientName))}
+        ${field('Date of birth', rg(TW_COL.dob) ? new Date(rg(TW_COL.dob)).toLocaleDateString('en-GB') : '')}
+        ${field('Procedure', rg(TW_COL.procedure))}
+        ${field('Surgeon', rg(TW_COL.surgeonName))}
+        ${field('Anaesthetist', rg(TW_COL.anaesthetistName))}
       </div>
     </div>
     <div class="gaspanel">
       <h2>Post-operative data</h2>
       <div class="steprow">
-        <div class="fld"><label>Time out of recovery</label><input id="tw_outRecovery" type="time" value="${g(TW_COL.outRecovery)}"
+        <div class="fld"><label>Time out of recovery</label><input id="tw_outRecovery" type="time" value="${g(TW_COL.outRecovery)}"${chg}
           style="padding:10px 12px;border:1px solid var(--line);border-radius:9px"></div>
-        <div class="fld"><label>Time into ward</label><input id="tw_intoWard" type="time" value="${g(TW_COL.intoWard)}"
+        <div class="fld"><label>Time into ward</label><input id="tw_intoWard" type="time" value="${g(TW_COL.intoWard)}"${chg}
           style="padding:10px 12px;border:1px solid var(--line);border-radius:9px"></div>
-        <div class="fld"><label>Time of discharge</label><input id="tw_timeDischarge" type="time" value="${g(TW_COL.timeDischarge)}"
+        <div class="fld"><label>Time of discharge</label><input id="tw_timeDischarge" type="time" value="${g(TW_COL.timeDischarge)}"${chg}
           style="padding:10px 12px;border:1px solid var(--line);border-radius:9px"></div>
-        <div class="fld"><label>Date of discharge</label><input id="tw_dateDischarge" type="date" value="${g(TW_COL.dateDischarge)}"
+        <div class="fld"><label>Date of discharge</label><input id="tw_dateDischarge" type="date" value="${g(TW_COL.dateDischarge)}"${chg}
           style="padding:10px 12px;border:1px solid var(--line);border-radius:9px"></div>
       </div>
       <button class="btn primary" id="twWardSaveBtn" onclick="twSubmitWard()" style="margin-top:6px">Save Ward Record</button>
