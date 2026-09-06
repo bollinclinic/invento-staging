@@ -485,6 +485,7 @@
     <a href="#rota" data-view="rota">Rota <span id="rotaBadge" style="display:none;background:var(--red);color:#fff;border-radius:99px;padding:1px 8px;font-size:11px;font-weight:800;margin-left:6px"></span></a>
     <a href="#procedures" data-view="procedures">Procedure costing</a>
     <a href="#samples" data-view="samples">Sample collection</a>
+    <a href="#theatreward" data-view="theatreward">Theatre &amp; Ward</a>
   </nav>
 
   <main id="main"></main>
@@ -6739,6 +6740,304 @@ function samplePDFSurgeon(){
   sampleExport(rows, 'Surgeon: '+name, 'Samples_'+name.replace(/[^A-Za-z0-9]+/g,'_')+'.pdf');
 }
 
+/* ---------------- theatre & ward timings (staff+) ---------------- */
+// Ported from the standalone bollinclinic.github.io/bollinclinic page -- same Cloudflare
+// Worker, same Microsoft Graph -> SharePoint Excel pipeline, same 22-column row shape. Moving
+// the SCREENS in here doesn't touch that pipe at all: this still just calls the same public
+// Worker URL with the same row shape, so nothing about the SharePoint side changes. Two
+// deliberate departures from the original: (1) this app's theme instead of the old dark one,
+// (2) the surgeon field goes through the same canonical surgeon picker used everywhere else
+// in this app, instead of free text, so a name typed here can never fragment into a
+// duplicate/near-duplicate the way plain text always eventually does.
+const THEATRE_WORKER_URL = 'https://bollin-theatre-proxy.bollinclinic.workers.dev';
+const TW_COL = {
+  date:0, theatreNumber:1, proposedOrder:2, actualList:3,
+  pid:4, patientName:5, dob:6, procedure:7,
+  surgeonName:8, anaesthetistName:9, anaestheticType:10,
+  timeSent:11, intoTheatre:12, anaStarted:13, anaReady:14,
+  knifeToSkin:15, finishedSuturing:16, intoRecovery:17,
+  outRecovery:18, intoWard:19, timeDischarge:20, dateDischarge:21
+};
+const TW_TOTAL_COLS = 22;
+const TW_ROOMS = ['Theatre 1','Theatre 2','Treatment Room 1','Treatment Room 2','Minor Op Room'];
+const TW_ANAESTHETIC_TYPES = ['General','Local','Sedation','Regional','Spinal'];
+
+let twRole = 'theatre';          // 'theatre' | 'ward'
+let twCurrentPid = null;         // PID of the record currently loaded, once saved/found
+let twLoadedRow = null;          // the 22-value array from the sheet, once a lookup succeeds
+let twPrefillPid = '';           // searched PID with no existing record -- carried into the form
+let twStatus = {level:'amber', text:'No patient selected — search by ID, or fill in a new theatre record'};
+
+async function twGetRows(){
+  const resp = await fetch(THEATRE_WORKER_URL + '?action=getRows');
+  const data = await resp.json();
+  if(!data.ok) throw new Error(data.error || 'Failed to get rows');
+  return data.rows;
+}
+async function twAddRow(values){
+  const resp = await fetch(THEATRE_WORKER_URL, { method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ action:'addRow', values }) });
+  const data = await resp.json();
+  if(!data.ok) throw new Error(data.error || 'Failed to add row');
+  return data;
+}
+async function twUpdateRow(index, values){
+  const resp = await fetch(THEATRE_WORKER_URL, { method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ action:'updateRow', index, values }) });
+  const data = await resp.json();
+  if(!data.ok) throw new Error(data.error || 'Failed to update row');
+  return data;
+}
+async function twFindRowByPid(pid){
+  const rows = await twGetRows();
+  const idx = rows.findIndex(r => String(r.values[0][TW_COL.pid]).trim() === String(pid).trim());
+  return { rows, idx };
+}
+function twVal(id){ const el = document.getElementById(id); return el ? el.value : ''; }
+// A surgeon name typed here must come from the shared surgeon picker -- EXCEPT an unchanged
+// value already sitting in an existing sheet row (older data entered before this picker
+// existed, or entered elsewhere) is let through as-is, so editing an unrelated field on an old
+// record doesn't force re-picking a name that was never wrong in the first place. Only a
+// genuinely new or edited surgeon name has to resolve to a real pick.
+function twResolveSurgeonName(id, originalName){
+  const text = (twVal(id)||'').trim();
+  if(!text) return {ok:true, name:''};
+  const pick = window._surgeonPick[id];
+  if(pick && pick.name===text) return {ok:true, name:pick.name};
+  if(originalName && text===String(originalName).trim()) return {ok:true, name:text};
+  return {ok:false};
+}
+function twStatusBadgeClass(level){ return level==='green'?'b-ok':level==='red'?'b-out':'b-low'; }
+
+function twSwitchRole(role){
+  twRole = role; twCurrentPid = null; twLoadedRow = null; twPrefillPid = '';
+  twStatus = {level:'amber', text:'No patient selected — search by ID'+(role==='theatre'?', or fill in a new record':'')};
+  render();
+}
+function twResetForm(){ twSwitchRole(twRole); }
+
+async function twLookupPatient(){
+  const pid = twVal('twPidLookup').trim();
+  if(!pid){ toast('Enter a Patient ID to search'); return; }
+  const el = document.getElementById('twStatusWrap');
+  if(el) el.innerHTML = '<span class="badge b-low">Searching…</span>';
+  try{
+    const { rows, idx } = await twFindRowByPid(pid);
+    if(idx < 0){
+      twCurrentPid = null; twLoadedRow = null; twPrefillPid = pid;
+      window._surgeonPick['twSurgeon'] = null;
+      twStatus = twRole==='ward'
+        ? {level:'red', text:'No theatre record found for '+pid+' — ask theatre staff to save one first'}
+        : {level:'amber', text:'No existing record for '+pid+' — fill in a new theatre record below'};
+    } else {
+      const v = rows[idx].values[0];
+      twCurrentPid = pid; twLoadedRow = v; twPrefillPid = '';
+      const surgeonName = v[TW_COL.surgeonName]||'';
+      window._surgeonPick['twSurgeon'] = (state.surgeons||[]).find(s=>s.name===surgeonName) || null;
+      twStatus = {level:'green', text:'Loaded record for '+(v[TW_COL.patientName]||pid)};
+    }
+  }catch(err){
+    twStatus = {level:'red', text:err.message};
+    toast('Lookup failed — '+err.message);
+  }
+  render();
+}
+
+async function twSubmitTheatre(){
+  const pid = twVal('tw_pid').trim();
+  if(!pid){ toast('Patient ID is required'); return; }
+  const surgeonRes = twResolveSurgeonName('twSurgeon', twLoadedRow ? twLoadedRow[TW_COL.surgeonName] : '');
+  if(!surgeonRes.ok){ toast('Select a surgeon from the list, or clear the field'); return; }
+  const btn = document.getElementById('twTheatreSaveBtn');
+  if(btn){ btn.disabled = true; btn.textContent = 'Saving…'; }
+  try{
+    const { rows, idx } = await twFindRowByPid(pid);
+    const rowData = new Array(TW_TOTAL_COLS).fill('');
+    rowData[TW_COL.date]            = twVal('tw_date');
+    rowData[TW_COL.theatreNumber]   = twVal('tw_theatreNumber');
+    rowData[TW_COL.proposedOrder]   = twVal('tw_proposedOrder');
+    rowData[TW_COL.actualList]      = twVal('tw_actualList');
+    rowData[TW_COL.pid]             = pid;
+    rowData[TW_COL.patientName]     = twVal('tw_patientName');
+    rowData[TW_COL.dob]             = twVal('tw_dob');
+    rowData[TW_COL.procedure]       = twVal('tw_procedure');
+    rowData[TW_COL.surgeonName]     = surgeonRes.name;
+    rowData[TW_COL.anaesthetistName]= twVal('tw_anaesthetistName');
+    rowData[TW_COL.anaestheticType] = twVal('tw_anaestheticType');
+    rowData[TW_COL.timeSent]        = twVal('tw_timeSent');
+    rowData[TW_COL.intoTheatre]     = twVal('tw_intoTheatre');
+    rowData[TW_COL.anaStarted]      = twVal('tw_anaStarted');
+    rowData[TW_COL.anaReady]        = twVal('tw_anaReady');
+    rowData[TW_COL.knifeToSkin]     = twVal('tw_knifeToSkin');
+    rowData[TW_COL.finishedSuturing]= twVal('tw_finishedSuturing');
+    rowData[TW_COL.intoRecovery]    = twVal('tw_intoRecovery');
+
+    let isNew = true;
+    if(idx >= 0){
+      // Preserve any ward columns already on this row -- the original page always sent a
+      // blank ward section on a theatre-side save, which would silently wipe recovery/
+      // discharge times if a theatre record was ever corrected after ward staff had already
+      // filled them in. Carrying the existing values through avoids that data loss.
+      const existing = rows[idx].values[0];
+      rowData[TW_COL.outRecovery]   = existing[TW_COL.outRecovery]   || '';
+      rowData[TW_COL.intoWard]      = existing[TW_COL.intoWard]      || '';
+      rowData[TW_COL.timeDischarge] = existing[TW_COL.timeDischarge] || '';
+      rowData[TW_COL.dateDischarge] = existing[TW_COL.dateDischarge] || '';
+      await twUpdateRow(rows[idx].index, rowData);
+      isNew = false;
+    } else {
+      await twAddRow(rowData);
+    }
+    twCurrentPid = pid; twLoadedRow = rowData; twPrefillPid = '';
+    twStatus = {level:'green', text:'Theatre record '+(isNew?'created':'updated')+' for '+(twVal('tw_patientName')||pid)};
+    toast(isNew ? '✓ New theatre record saved' : '✓ Theatre record updated');
+  }catch(err){
+    twStatus = {level:'red', text:err.message};
+    toast('❌ '+err.message);
+  }
+  render();
+}
+
+async function twSubmitWard(){
+  if(!twCurrentPid){ toast('Look up a patient first — the theatre record must already exist'); return; }
+  const pid = twCurrentPid;
+  const btn = document.getElementById('twWardSaveBtn');
+  if(btn){ btn.disabled = true; btn.textContent = 'Saving…'; }
+  try{
+    const { rows, idx } = await twFindRowByPid(pid);
+    if(idx < 0){ toast('❌ Patient record not found — save theatre record first'); render(); return; }
+    const existing = rows[idx].values[0];
+    const rowData = [...existing];
+    rowData[TW_COL.outRecovery]   = twVal('tw_outRecovery');
+    rowData[TW_COL.intoWard]      = twVal('tw_intoWard');
+    rowData[TW_COL.timeDischarge] = twVal('tw_timeDischarge');
+    rowData[TW_COL.dateDischarge] = twVal('tw_dateDischarge');
+    await twUpdateRow(rows[idx].index, rowData);
+    twLoadedRow = rowData;
+    twStatus = {level:'green', text:'Ward record saved — record complete'};
+    toast('✓ Ward record saved');
+  }catch(err){
+    twStatus = {level:'red', text:err.message};
+    toast('❌ '+err.message);
+  }
+  render();
+}
+
+function twTheatreFormHtml(){
+  const r = twLoadedRow;
+  const g = (col) => r ? (r[col]||'') : '';
+  const pidVal = r ? g(TW_COL.pid) : twPrefillPid;
+  const surgeonVal = r ? g(TW_COL.surgeonName) : '';
+  return `
+    <div class="gaspanel">
+      <h2>Theatre record</h2>
+      <div class="steprow">
+        <div class="fld"><label>Date</label><input id="tw_date" type="date" value="${g(TW_COL.date)}"
+          style="padding:10px 12px;border:1px solid var(--line);border-radius:9px"></div>
+        <div class="fld"><label>Theatre / Room</label><select id="tw_theatreNumber"
+          style="padding:10px 12px;border:1px solid var(--line);border-radius:9px">
+          <option value=""></option>${TW_ROOMS.map(room=>`<option ${g(TW_COL.theatreNumber)===room?'selected':''}>${room}</option>`).join('')}</select></div>
+        <div class="fld"><label>Proposed list order</label><select id="tw_proposedOrder"
+          style="padding:10px 12px;border:1px solid var(--line);border-radius:9px">
+          <option value=""></option>${Array.from({length:10},(_,i)=>i+1).map(n=>`<option ${String(g(TW_COL.proposedOrder))===String(n)?'selected':''}>${n}</option>`).join('')}</select></div>
+        <div class="fld"><label>Actual list order</label><select id="tw_actualList"
+          style="padding:10px 12px;border:1px solid var(--line);border-radius:9px">
+          <option value=""></option>${Array.from({length:10},(_,i)=>i+1).map(n=>`<option ${String(g(TW_COL.actualList))===String(n)?'selected':''}>${n}</option>`).join('')}</select></div>
+      </div>
+      <div class="steprow">
+        <div class="fld"><label>Patient ID number *</label><input id="tw_pid" type="text" value="${String(pidVal).replace(/"/g,'&quot;')}"
+          style="padding:10px 12px;border:1px solid var(--line);border-radius:9px"></div>
+        <div class="fld"><label>Patient name</label><input id="tw_patientName" type="text" value="${String(g(TW_COL.patientName)).replace(/"/g,'&quot;')}"
+          style="padding:10px 12px;border:1px solid var(--line);border-radius:9px"></div>
+        <div class="fld"><label>Date of birth</label><input id="tw_dob" type="date" value="${g(TW_COL.dob)}"
+          style="padding:10px 12px;border:1px solid var(--line);border-radius:9px"></div>
+      </div>
+      <div class="steprow">
+        <div class="fld" style="flex:1;min-width:260px"><label>Procedure</label><input id="tw_procedure" type="text" value="${String(g(TW_COL.procedure)).replace(/"/g,'&quot;')}"
+          style="width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:9px"></div>
+      </div>
+      <div class="steprow">
+        <div class="fld" style="min-width:220px"><label>Surgeon</label>${surgeonInputHTML('twSurgeon', surgeonVal, 'e.g. Aftab Siddiqui')}</div>
+        <div class="fld"><label>Anaesthetist name</label><input id="tw_anaesthetistName" type="text" value="${String(g(TW_COL.anaesthetistName)).replace(/"/g,'&quot;')}"
+          style="padding:10px 12px;border:1px solid var(--line);border-radius:9px"></div>
+        <div class="fld"><label>Anaesthetic type</label><select id="tw_anaestheticType"
+          style="padding:10px 12px;border:1px solid var(--line);border-radius:9px">
+          <option value=""></option>${TW_ANAESTHETIC_TYPES.map(t=>`<option ${g(TW_COL.anaestheticType)===t?'selected':''}>${t}</option>`).join('')}</select></div>
+      </div>
+    </div>
+    <div class="gaspanel">
+      <h2>Intra-operative timings</h2>
+      <div class="steprow">
+        ${[['timeSent','Time sent'],['intoTheatre','Into theatre'],['anaStarted','Anaesthetic started'],
+           ['anaReady','Anaesthetic ready'],['knifeToSkin','Knife to skin'],['finishedSuturing','Finished suturing'],
+           ['intoRecovery','Into recovery']].map(([key,label])=>`
+        <div class="fld"><label>${label}</label><input id="tw_${key}" type="time" value="${g(TW_COL[key])}"
+          style="padding:10px 12px;border:1px solid var(--line);border-radius:9px"></div>`).join('')}
+      </div>
+      <button class="btn primary" id="twTheatreSaveBtn" onclick="twSubmitTheatre()" style="margin-top:6px">Save Theatre Record</button>
+    </div>`;
+}
+
+function twWardFormHtml(){
+  const r = twLoadedRow;
+  if(!r){
+    return `<div class="gaspanel"><div class="sub" style="margin:0">Look up a patient by ID above — the theatre record must already exist before ward times can be added.</div></div>`;
+  }
+  const g = (col) => r[col]||'';
+  const field = (label,val) => `<div><div style="font-size:12px;color:var(--ink-soft)">${label}</div><strong>${val||'—'}</strong></div>`;
+  return `
+    <div class="gaspanel">
+      <h2>Patient (from theatre record — read-only)</h2>
+      <div style="display:flex;flex-wrap:wrap;gap:22px">
+        ${field('Patient ID', g(TW_COL.pid))}
+        ${field('Patient name', g(TW_COL.patientName))}
+        ${field('Date of birth', g(TW_COL.dob) ? new Date(g(TW_COL.dob)).toLocaleDateString('en-GB') : '')}
+        ${field('Procedure', g(TW_COL.procedure))}
+        ${field('Surgeon', g(TW_COL.surgeonName))}
+        ${field('Anaesthetist', g(TW_COL.anaesthetistName))}
+      </div>
+    </div>
+    <div class="gaspanel">
+      <h2>Post-operative data</h2>
+      <div class="steprow">
+        <div class="fld"><label>Time out of recovery</label><input id="tw_outRecovery" type="time" value="${g(TW_COL.outRecovery)}"
+          style="padding:10px 12px;border:1px solid var(--line);border-radius:9px"></div>
+        <div class="fld"><label>Time into ward</label><input id="tw_intoWard" type="time" value="${g(TW_COL.intoWard)}"
+          style="padding:10px 12px;border:1px solid var(--line);border-radius:9px"></div>
+        <div class="fld"><label>Time of discharge</label><input id="tw_timeDischarge" type="time" value="${g(TW_COL.timeDischarge)}"
+          style="padding:10px 12px;border:1px solid var(--line);border-radius:9px"></div>
+        <div class="fld"><label>Date of discharge</label><input id="tw_dateDischarge" type="date" value="${g(TW_COL.dateDischarge)}"
+          style="padding:10px 12px;border:1px solid var(--line);border-radius:9px"></div>
+      </div>
+      <button class="btn primary" id="twWardSaveBtn" onclick="twSubmitWard()" style="margin-top:6px">Save Ward Record</button>
+    </div>`;
+}
+
+function theatreWardView(){
+  const tabBtn = (id,label) => `<button onclick="twSwitchRole('${id}')"
+      style="padding:10px 18px;border:none;border-bottom:3px solid ${twRole===id?'var(--pine)':'transparent'};
+      background:none;font-weight:${twRole===id?'700':'600'};font-size:14.5px;cursor:pointer;
+      color:${twRole===id?'var(--pine)':'var(--ink-soft)'}">${label}</button>`;
+  return `<h1>Theatre &amp; Ward</h1>
+    <div class="sub">Patient timings for theatre and ward staff — saved straight to the clinic's SharePoint record, exactly as before. Look up an existing Patient ID to continue a record, or start a new one below.</div>
+    <div style="border-bottom:1px solid var(--line);margin-bottom:16px;display:flex;gap:4px">
+      ${tabBtn('theatre','🏥 Theatre Staff')}
+      ${tabBtn('ward','🛏 Ward Staff')}
+    </div>
+    <div class="gaspanel">
+      <h2>Patient identification</h2>
+      <div class="steprow" style="align-items:end">
+        <div class="fld"><label>Patient ID number</label><input id="twPidLookup" type="text" placeholder="Hospital number"
+          onkeydown="if(event.key==='Enter') twLookupPatient()"
+          style="padding:10px 12px;border:1px solid var(--line);border-radius:9px"></div>
+        <button class="btn" onclick="twLookupPatient()">Look up</button>
+        <button class="btn" onclick="twResetForm()" title="Clear this form">↺ New / clear form</button>
+      </div>
+      <div id="twStatusWrap" style="margin-top:10px"><span class="badge ${twStatusBadgeClass(twStatus.level)}">${twStatus.text}</span></div>
+    </div>
+    ${twRole==='theatre' ? twTheatreFormHtml() : twWardFormHtml()}`;
+}
+
 /* ---------------- router ---------------- */
 
 
@@ -6794,6 +7093,7 @@ function render(){
   else if(v==='stickers') m.innerHTML = stickersView();
   else if(v==='procedures') m.innerHTML = procView();
   else if(v==='samples') m.innerHTML = samplesView();
+  else if(v==='theatreward') m.innerHTML = theatreWardView();
   else if(v==='users') m.innerHTML = usersView();
   else if(v==='rota') m.innerHTML = rotaView();
   else m.innerHTML = trackerView(v);
@@ -7736,6 +8036,7 @@ function viewAllowed(v){
   if(v==='stickers') return can('sticker');
   if(v==='procedures') return true;   // all roles can run procedures (financials hidden inside)
   if(v==='samples') return true;   // all roles — everyone can view and advance status; creating/editing/deleting stays gated inside the view
+  if(v==='theatreward') return isStaffPlus();   // real patient timing data -- staff+, same tier as sample collection was meant to be
   if(v==='users') return isDeveloper();
   if(v==='rota') return isSuperadmin();
   return true;
