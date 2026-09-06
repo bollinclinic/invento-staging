@@ -8121,7 +8121,7 @@ function viewAllowed(v){
   if(v==='stickers') return can('sticker');
   if(v==='procedures') return true;   // all roles can run procedures (financials hidden inside)
   if(v==='samples') return true;   // all roles — everyone can view and advance status; creating/editing/deleting stays gated inside the view
-  if(v==='theatreward') return isStaffPlus();   // real patient timing data -- staff+, same tier as sample collection was meant to be
+  if(v==='theatreward') return true;   // all roles, per explicit request -- matches procedures/samples
   if(v==='users') return isDeveloper();
   if(v==='rota') return isSuperadmin();
   return true;
