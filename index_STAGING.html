@@ -470,6 +470,7 @@
     <a href="#alerts" data-view="alerts">Alerts</a>
     <div class="navsec">Checks</div>
     <a href="#gas" data-view="gas">Gas room checks</a>
+    <a href="#theatreward" data-view="theatreward">Theatre &amp; Ward</a>
     <a href="#stocktake" data-view="stocktake">Stocktake</a>
     <a href="#values" data-view="values">Stock value</a>
     <div class="navsec">Admin</div>
@@ -485,7 +486,6 @@
     <a href="#rota" data-view="rota">Rota <span id="rotaBadge" style="display:none;background:var(--red);color:#fff;border-radius:99px;padding:1px 8px;font-size:11px;font-weight:800;margin-left:6px"></span></a>
     <a href="#procedures" data-view="procedures">Procedure costing</a>
     <a href="#samples" data-view="samples">Sample collection</a>
-    <a href="#theatreward" data-view="theatreward">Theatre &amp; Ward</a>
   </nav>
 
   <main id="main"></main>
@@ -6794,6 +6794,22 @@ function twClearDraft(){
   twDraft = {};
   try{ localStorage.removeItem('bollin_tw_draft'); }catch(e){}
 }
+// One-click "it's happening right now" entry for the timing fields -- still just a normal time
+// input underneath, so typing a time by hand works exactly as before.
+function twSetNow(id){
+  const el = document.getElementById(id);
+  if(!el) return;
+  const now = new Date();
+  el.value = String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0');
+  twSaveDraft();   // programmatically setting .value doesn't fire onchange, so save the draft ourselves
+}
+function twTimeFieldHtml(id, label, value, chg){
+  return `<div class="fld"><label>${label}</label>
+    <div style="display:flex;gap:6px">
+      <input id="${id}" type="time" value="${value}"${chg} style="padding:10px 12px;border:1px solid var(--line);border-radius:9px">
+      <button type="button" class="btn" onclick="twSetNow('${id}')" title="Fill in the current time" style="padding:8px 10px;font-size:12px;white-space:nowrap">Now</button>
+    </div></div>`;
+}
 // A field change (draft) always wins over the last-loaded record, so an in-progress edit to an
 // existing patient survives a tab switch exactly like a brand new entry does; only a fresh
 // lookup/reset/save clears the draft and lets the loaded record show through again.
@@ -7041,9 +7057,7 @@ function twTheatreFormHtml(){
       <div class="steprow">
         ${[['timeSent','Time sent'],['intoTheatre','Into theatre'],['anaStarted','Anaesthetic started'],
            ['anaReady','Anaesthetic ready'],['knifeToSkin','Knife to skin'],['finishedSuturing','Finished suturing'],
-           ['intoRecovery','Into recovery']].map(([key,label])=>`
-        <div class="fld"><label>${label}</label><input id="tw_${key}" type="time" value="${g(TW_COL[key])}"${chg}
-          style="padding:10px 12px;border:1px solid var(--line);border-radius:9px"></div>`).join('')}
+           ['intoRecovery','Into recovery']].map(([key,label])=>twTimeFieldHtml('tw_'+key, label, g(TW_COL[key]), chg)).join('')}
       </div>
       <button class="btn primary" id="twTheatreSaveBtn" onclick="twSubmitTheatre()" style="margin-top:6px">Save Theatre Record</button>
     </div>`;
@@ -7074,12 +7088,9 @@ function twWardFormHtml(){
     <div class="gaspanel">
       <h2>Post-operative data</h2>
       <div class="steprow">
-        <div class="fld"><label>Time out of recovery</label><input id="tw_outRecovery" type="time" value="${g(TW_COL.outRecovery)}"${chg}
-          style="padding:10px 12px;border:1px solid var(--line);border-radius:9px"></div>
-        <div class="fld"><label>Time into ward</label><input id="tw_intoWard" type="time" value="${g(TW_COL.intoWard)}"${chg}
-          style="padding:10px 12px;border:1px solid var(--line);border-radius:9px"></div>
-        <div class="fld"><label>Time of discharge</label><input id="tw_timeDischarge" type="time" value="${g(TW_COL.timeDischarge)}"${chg}
-          style="padding:10px 12px;border:1px solid var(--line);border-radius:9px"></div>
+        ${twTimeFieldHtml('tw_outRecovery', 'Time out of recovery', g(TW_COL.outRecovery), chg)}
+        ${twTimeFieldHtml('tw_intoWard', 'Time into ward', g(TW_COL.intoWard), chg)}
+        ${twTimeFieldHtml('tw_timeDischarge', 'Time of discharge', g(TW_COL.timeDischarge), chg)}
         <div class="fld"><label>Date of discharge</label><input id="tw_dateDischarge" type="date" value="${g(TW_COL.dateDischarge)}"${chg}
           style="padding:10px 12px;border:1px solid var(--line);border-radius:9px"></div>
       </div>
