@@ -189,6 +189,17 @@ expiry = dispatch date + 1 year.
 **Procedure case costing** (all roles; financials admin+):
 - **Concurrent: one open case per room** (`PROC_ROOMS`: Theatre 1, Theatre 2, Minor ops),
   selectable via room tabs. Scanning adds to the room on screen.
+- **A running case always has a theatre** (migration `20261010100000_proc_keep_room.sql`, §9
+  #15):
+  - CHECK `procedures_open_needs_room`. `proc_update_meta` keeps an open case's room when none
+    is sent, and refuses a move into a busy theatre. `proc_reopen` refuses a busy theatre
+    before touching stock, and puts a room-less closed case into the first free theatre.
+  - Every call that edits a case must send its room (`procRoomOf(p)`).
+  - **On load the database's room wins** over the screen's memory (memory only supplies carts
+    and not-yet-confirmed local cases). A legacy room-less open case goes in the room this
+    screen had it in, else the first free one, and is flagged `_roomGuessed` with an admin
+    "Yes, it is in …" button (`procConfirmRoom`). It never displaces a case that has a room.
+    With no free room it is listed in `state.procUnplaced` as a warning.
 - Items sit in a cart. Stock is NOT decremented until the case is **ended**. Ending is one
   atomic RPC, `proc_consume_batch`: consume stock, record cost + bill lines, close the case.
 - The cart auto-saves to the server (`proc_save_cart`). Manual "Save progress" sorts A→Z;
@@ -591,6 +602,14 @@ Sheets-era notes and may be out of date; this file is the current reference.
     for six weeks; the evidence was `barcode_link_events` having no row newer than the import.
     When moving a call from "match by code" to "match by id", check every caller passes the
     id, and look at the table for proof that writes are landing.
+15. **Running procedure lost its theatre (Oct 2026):** "Edit details" on a running case
+    called `proc_update_meta` without `p_room`, and the function saved `room = p_room`, i.e.
+    NULL. The editing screen still showed the right room, but other devices and fresh logins
+    put the case under Theatre 1 (or hid a real Theatre 1 case). A screen that still held it
+    showed it in its old room, and the theatre was no longer reserved, so a second case could
+    start there. Found when a case showed in the wrong theatre after a change of login and
+    had to be restarted. Rule: an optional parameter must never mean "set to null" on an
+    update; default to keeping the current value, and send every field that the RPC writes.
 
 ---
 
@@ -602,6 +621,9 @@ Regression suites live in **`tests/`** and run with `node tests/run_all.js`:
 - stock/procedures (7-feature batch);
 - item scan codes (`item_codes_tests.js`: extra codes, linking, one-click codes; database side
   in `tests/sql/item_barcodes_db_tests.sql`, staging only);
+- procedure rooms (`proc_rooms_tests.js`: where running cases appear after a load, "Edit
+  details" keeping the theatre, the guessed-theatre warning; database side in
+  `tests/sql/proc_room_db_tests.sql`, staging only, needs no running cases on staging);
 - rota;
 - rota texts (screens);
 - SMS dispatcher: `tests/sms_dispatch_tests.mjs`, which runs the Edge Function's `core.ts`
