@@ -179,6 +179,22 @@ the Offsite tab. Applies to the 4 non-instrument trackers.
 shortcut. Also: stock requests, alerts, stock value explorer, obsolete stock, activity log
 (filterable PDF), stocktake (month-end/annual; a physical stock-take sheet for superadmin+),
 barcode/label printing, assets register (admin), gas room daily checks.
+- **Samples tile** (`samplesAwaitingTile`, the 10th tile): appears only while samples are
+  recorded and not yet marked Sent (status `Collected`), for everyone who can open Sample
+  collection. It counts **patients, not specimens** (`samplesAwaiting`: distinct PAT number,
+  case-insensitive; a collection with no PAT counts as one patient), e.g. "4 — Patient samples
+  awaiting collection · 9 specimens".
+
+**Requests** (all roles create; staff+ respond): two ways to raise one, chosen by chips
+(`reqForm.mode`):
+- **Type the item** (the original free-text form, for things not stocked).
+- **Pick from inventory** (`reqStockForm`): search live stock by name, reference, barcode or
+  extra code (`reqSearchItems`; never obsolete, offsite or services), choose the item, enter a
+  quantity. The request is saved with the item's name plus `item_code` (its code, else its
+  barcode), `tracker` and `item_id` (migration `20261011100000_request_item_link.sql`), and the
+  list shows "Ref …" under the name, with the stock right now on open requests.
+- `reqForm.pick` is a snapshot taken when the item is chosen, so a background reload can't
+  change what is submitted. A typed request sends none of the inventory fields.
 
 **Sterilisation workflow**: instruments go **used → dispatched to CSSD → received back**.
 Tabs: Log used, Dispatch, Receive, On hand, History, each with **one** search box (§9 #4).
@@ -624,6 +640,8 @@ Regression suites live in **`tests/`** and run with `node tests/run_all.js`:
 - procedure rooms (`proc_rooms_tests.js`: where running cases appear after a load, "Edit
   details" keeping the theatre, the guessed-theatre warning; database side in
   `tests/sql/proc_room_db_tests.sql`, staging only, needs no running cases on staging);
+- dashboard samples tile and inventory requests (`dash_requests_tests.js`; database side in
+  `tests/sql/request_item_db_tests.sql`, staging only);
 - rota;
 - rota texts (screens);
 - SMS dispatcher: `tests/sms_dispatch_tests.mjs`, which runs the Edge Function's `core.ts`
