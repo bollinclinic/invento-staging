@@ -4751,6 +4751,26 @@ function procClearRoom(id){
   procSyncActive();
 }
 function procAnyActive(){ return Object.keys(_procByRoom).length>0; }
+// The theatre a running case is in on this screen (its room slot), else its saved room.
+function procRoomOf(p){
+  if(!p) return null;
+  const slot = PROC_ROOMS.find(r=>_procByRoom[r]===p);
+  return slot || (PROC_ROOMS.indexOf(p.room)>=0 ? p.room : null);
+}
+// Admin+: save the theatre of a running case that had none recorded (shown with a warning).
+async function procConfirmRoom(){
+  const p = activeProc;
+  if(!p || !p._roomGuessed || !(session&&isAdmin())) return;
+  const room = procRoomOf(p);
+  if(!room) return;
+  if(!LIVE || String(p.procedureId).startsWith('PROC-LOCAL')){ p.room = room; p._roomGuessed = false; render(); return; }
+  try{
+    await api({action:'procUpdateMeta', procedureId:p.procedureId, surgeon:p.surgeon, surgeonId:p.surgeonId||null,
+      procedure:p.procedure, date:p.date, patientRef:p.patientRef, room, by:myName||''});
+    p.room = room; p._roomGuessed = false;
+    render(); toast('Saved: this case is in '+room);
+  }catch(err){ toast('Not saved — '+err.message); loadAll(); }
+}
 function procRoomsRunning(){ return PROC_ROOMS.filter(r=>_procByRoom[r]); }
 
 function procActive(){ return !!activeProc; }
@@ -4769,6 +4789,8 @@ function procView(){
   return `<h1>Procedure case costing</h1>
     <div class="sub">Track exactly what each surgeon and procedure consumes. Each room runs its own case at the same time — pick the room below. Scanning adds to <strong>the room shown here</strong>.${runningCount>1?` <strong style="color:var(--pine)">${runningCount} cases running now.</strong>`:''}</div>
     <div style="display:flex;gap:4px;border-bottom:1px solid var(--line);margin-bottom:14px;flex-wrap:wrap">${tabs}</div>
+    ${(state.procUnplaced||[]).length ? `<div class="note">⚠ ${state.procUnplaced.length} running case${state.procUnplaced.length===1?' has':'s have'} no theatre recorded and every theatre is busy, so ${state.procUnplaced.length===1?'it is':'they are'} not shown in a room:
+      ${state.procUnplaced.map(x=>'<strong>'+String(x.surgeon||'—').replace(/</g,'&lt;')+'</strong> — '+String(x.procedure||'').replace(/</g,'&lt;')).join('; ')}. End one of the other cases and ${state.procUnplaced.length===1?'it':'they'} will appear.</div>` : ''}
     ${activeProc ? procConsolePanel() : procStartPanel(open)}
     ${procHistoryPanel()}`;
 }
@@ -4960,7 +4982,9 @@ function procConsolePanel(){
     <div class="gaspanel" style="border:2px solid var(--pine);position:relative">
       <button onclick="cancelProc()" title="Cancel this procedure (started by mistake). Nothing has been taken from stock."
         style="position:absolute;top:10px;right:12px;width:32px;height:32px;border-radius:9px;border:1px solid var(--line);background:var(--card);color:var(--red);font-size:16px;font-weight:700;cursor:pointer;line-height:1">✕</button>
-      <h2><span class="led green"></span>${p.room||_procRoom} — procedure in progress, scan to add items</h2>
+      <h2><span class="led green"></span>${procRoomOf(p)||_procRoom} — procedure in progress, scan to add items</h2>
+      ${p._roomGuessed ? `<div class="note" style="margin:0 0 12px">⚠ This case had <strong>no theatre recorded</strong>, so it is shown in ${procRoomOf(p)||_procRoom}. Check that is right.
+        ${(session&&isAdmin()) ? `<button class="btn" style="margin-left:8px;padding:5px 12px" onclick="procConfirmRoom()">Yes, it is in ${procRoomOf(p)||_procRoom}</button>` : 'An admin can confirm it.'}</div>` : ''}
       <div style="display:flex;flex-wrap:wrap;gap:18px;align-items:center;margin-bottom:8px">
         <div><div style="font-size:12px;color:var(--ink-soft)">Surgeon</div><strong>${p.surgeon||'—'}</strong></div>
         <div><div style="font-size:12px;color:var(--ink-soft)">Procedure</div><strong>${p.procedure||'—'}</strong></div>
@@ -5035,7 +5059,7 @@ async function procSaveEditCell(id, field, value){
   try{
     await api({action:'procUpdateMeta', procedureId:id, surgeon:p.surgeon, surgeonId:p.surgeonId||null, procedure:p.procedure, date:p.date, patientRef:p.patientRef, room:p.room||null, by:myName||''});
     toast('Updated');
-  }catch(err){ toast('Not saved — '+err.message); }
+  }catch(err){ toast('Not saved — '+err.message); loadAll(); }   // reload so the screen shows what is really saved
 }
 function procEditableCell(p, field, displayHtml, inputType){
   const editing = _procEditCell && _procEditCell.id===p.procedureId && _procEditCell.field===field;
@@ -5463,11 +5487,15 @@ async function procEditMeta(){
   activeProc.surgeon=surgeonTrimmed; activeProc.surgeonId = match ? match.id : null;
   activeProc.procedure=procedure.trim();
   activeProc.date=date.trim(); activeProc.patientRef=patientRef.trim();
+  // Always send the case's theatre. Leaving it out used to save the theatre as blank, so other
+  // devices had to guess where the case was (and the theatre stopped being reserved).
+  const room = procRoomOf(activeProc);
+  if(room) activeProc.room = room;
   render(); toast('Details updated');
   if(LIVE && !String(activeProc.procedureId).startsWith('PROC-LOCAL')){
     try{ await api({action:'procUpdateMeta', procedureId:activeProc.procedureId,
       surgeon:activeProc.surgeon, surgeonId:activeProc.surgeonId, procedure:activeProc.procedure,
-      date:activeProc.date, patientRef:activeProc.patientRef, by:myName||''}); }
+      date:activeProc.date, patientRef:activeProc.patientRef, room, by:myName||''}); }
     catch(err){ toast('Not saved — '+err.message); }
   }
 }
@@ -10975,22 +11003,37 @@ async function loadAll(){
       tracker:(l.Tracker||'').toLowerCase(), code:l.Code||'', name:l.Name||'',
       qty:Number(l.Qty)||0, unitCost:l.UnitCost===''||l.UnitCost==null?'':Number(l.UnitCost),
       lineCost:l.LineCost===''||l.LineCost==null?'':Number(l.LineCost), by:l.By||''}));
-    // rebuild the room map
+    // rebuild the room map. The DATABASE's theatre is the truth for every running case: this
+    // device's memory only supplies carts, and the room of a case the server hasn't confirmed
+    // yet. (It used to let memory win, so two devices could show one case in different rooms.)
     _procByRoom = {};
-    // 1) re-attach rooms that were live in memory (keep their carts, even local-id ones)
-    Object.keys(_liveByRoom).forEach(room=>{ const L=_liveByRoom[room];
-      const same = state.procedures.find(p=>p.procedureId===L.id);
-      if(same){ same._cart = L.cart; if(same.room||room) same.room = same.room||room; _procByRoom[room]=same; }
-      else if(L.local){ L.obj._cart = L.cart; _procByRoom[room]=L.obj; }   // not on sheet yet
+    const liveById = {};
+    Object.keys(_liveByRoom).forEach(room=>{ const L=_liveByRoom[room]; liveById[L.id] = Object.assign({room}, L); });
+    const openCases = state.procedures.filter(p=>p.status==='Open' && p.procedureId!==window._justEndedProc);
+    const giveCart = p => {
+      const L = liveById[p.procedureId];
+      if(L) p._cart = L.cart;
+      else if(p.cartJSON){ try{ p._cart = JSON.parse(p.cartJSON); }catch(e){ p._cart = p._cart||[]; } }
+    };
+    // 1) running cases with a theatre recorded go in that theatre (the database allows one each)
+    openCases.filter(p=>PROC_ROOMS.indexOf(p.room)>=0).forEach(p=>{
+      if(_procByRoom[p.room]) return;
+      giveCart(p); _procByRoom[p.room] = p;
     });
-    // 2) place any Open procedures from the sheet into their room slot (fresh load / another device)
-    state.procedures.filter(p=>p.status==='Open').forEach(p=>{
-      const room = PROC_ROOMS.indexOf(p.room)>=0 ? p.room : PROC_ROOMS[0];
-      if(p.procedureId===window._justEndedProc) return;   // don't resurrect a just-ended case
-      if(!_procByRoom[room]){
-        if(p.cartJSON){ try{ p._cart = JSON.parse(p.cartJSON); }catch(e){ p._cart = p._cart||[]; } }
-        _procByRoom[room] = p;
-      }
+    // 2) a case started on this device that the server hasn't confirmed yet keeps its room, if free
+    Object.keys(liveById).forEach(id=>{ const L = liveById[id];
+      if(L.local && !_procByRoom[L.room]){ L.obj._cart = L.cart; _procByRoom[L.room] = L.obj; }
+    });
+    // 3) a running case with NO theatre recorded (damaged by the old "Edit details" bug, see
+    //    migration 20261010100000; the database now refuses new ones): the room this device had it
+    //    in if that is free, else the first free room, flagged on screen. It never displaces a
+    //    case that has a theatre. With no free room it is listed as a warning instead of vanishing.
+    state.procUnplaced = [];
+    openCases.filter(p=>PROC_ROOMS.indexOf(p.room)<0).forEach(p=>{
+      const L = liveById[p.procedureId];
+      const room = (L && PROC_ROOMS.indexOf(L.room)>=0 && !_procByRoom[L.room]) ? L.room : PROC_ROOMS.find(r=>!_procByRoom[r]);
+      if(room){ giveCart(p); p.room = room; p._roomGuessed = true; _procByRoom[room] = p; }
+      else state.procUnplaced.push(p);
     });
     procSyncActive();   // keep the plain activeProc pointer in step with the rebuilt room map
     state.gasChecks = (data.gasChecks||[]).map(g=>({_row:g._row, date:g.Date?String(g.Date).slice(0,10):'', by:g.By||'',
