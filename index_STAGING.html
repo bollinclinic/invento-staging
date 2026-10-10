@@ -135,6 +135,7 @@
   .tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-bottom:22px}
   .tile{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 16px;cursor:pointer;transition:border-color .15s}
   .tile:hover{border-color:var(--pine)}
+  .reqhit:hover{background:var(--mist)} .reqhit:last-child{border-bottom:none !important}
   .tile{position:relative}
   .tile .ic{position:absolute;top:10px;right:12px;font-size:19px;opacity:.9}
   @keyframes attnGlow{0%,100%{box-shadow:0 0 0 0 rgba(176,138,62,0)}50%{box-shadow:0 0 0 6px rgba(176,138,62,.28)}}
@@ -1497,6 +1498,24 @@ async function bulkGenerateBarcodes(key){
   }catch(err){ toast('Not saved — '+err.message); }
 }
 
+// Samples recorded but not yet marked Sent, i.e. still waiting to be collected from the clinic.
+// Counted per PATIENT, not per specimen: 9 specimens from 4 patients = 4. A patient is their PAT
+// number; a collection with no PAT number counts as one patient of its own.
+function samplesAwaiting(){
+  const rows = (state.samples||[]).filter(x=>String(x.status||'Collected')==='Collected');
+  const patients = new Set(rows.map(x=>{
+    const pat = String(x.pat==null?'':x.pat).trim().toLowerCase();
+    return pat ? 'pat:'+pat : 'col:'+String(x.collectionId||x.id||'');
+  }));
+  return {patients:patients.size, specimens:rows.length};
+}
+// The dashboard tile: shown only while something is waiting, to everyone who can open Sample collection.
+function samplesAwaitingTile(){
+  if(!viewAllowed('samples')) return '';
+  const a = samplesAwaiting();
+  if(!a.patients) return '';
+  return `<div class="tile warn attn" onclick="nav('samples')" title="Samples recorded and not yet marked as Sent. Open Sample collection to mark them."><span class="ic">🧪</span><div class="n">${a.patients}</div><div class="l">Patient sample${a.patients===1?'':'s'} awaiting collection · ${a.specimens} specimen${a.specimens===1?'':'s'}</div></div>`;
+}
 function dashboardView(){
   const stock = state.items.filter(i=>i.tracker!=='instruments' && i.tracker!=='services' && !i.obsolete && i.loc!==OFFSITE_STORE);
   const low = stock.filter(i=>i.qty>0 && i.qty<=i.reorder);
@@ -1523,6 +1542,7 @@ function dashboardView(){
       <div class="tile ${pend?'attn':''}" onclick="nav('requests')"><span class="ic">📨</span><div class="n">${pend}</div><div class="l">Requests awaiting response</div></div>
       ${can('implants')?`<div class="tile ${(impOrdered+impAwaitRet)?'attn':''}" onclick="nav('implants')"><span class="ic">⚕️</span><div class="n">${impOrdered}</div><div class="l">Implants ordered · ${impAwaitRet} awaiting return</div></div>`:''}
       <div id="twDischargeTileWrap">${twDischargeTileHtml()}</div>
+      ${samplesAwaitingTile()}
     </div>
     <h1 style="font-size:16px">Needs attention</h1>
     <div class="sub">Low, out of stock and short-dated items across every tracker</div>
@@ -1731,6 +1751,76 @@ async function txReportPDF(){
 
 // ---- double-click data cleanup on the Requests list (same gate as respond: staff+) ----
 let _reqEditCell = null; // {ix, field}
+/* The request form has two ways in: type the item (for things we don't stock), or pick it from
+   the inventory. A picked request is saved with the item's reference, tracker and id as well as
+   its name (stock_requests.item_code / tracker / item_id), so the stock team sees exactly which
+   line was asked for. reqForm.pick is a SNAPSHOT taken when the item is chosen, so a background
+   reload of the stock list can't change what gets submitted. */
+const reqForm = {mode:'type', q:'', pick:null};
+function reqItemRef(it){ return String(it.code||'').trim() || String(it.barcode||'').trim(); }
+function reqSetMode(m){ reqForm.mode = (m==='stock') ? 'stock' : 'type'; reqForm.pick = null; render();
+  if(reqForm.mode==='stock') requestAnimationFrame(()=>{ const el=document.getElementById('reqSearch'); if(el && el.focus) el.focus(); }); }
+// what can be picked: live stock items (not obsolete, not offsite, not billable services)
+function reqSearchItems(q){
+  const t = String(q||'').toLowerCase().trim();
+  if(t.length < 2) return [];
+  const has = v => String(v==null?'':v).toLowerCase().includes(t);
+  return state.items.map((it,ix)=>({it,ix}))
+    .filter(x=>!x.it.obsolete && x.it.tracker!=='services' && x.it.loc!==OFFSITE_STORE &&
+      (has(x.it.name) || has(x.it.code) || has(x.it.barcode) || (x.it.extraCodes||[]).some(has)))
+    .sort((a,b)=>{
+      const as = String(a.it.name||'').toLowerCase().startsWith(t) ? 0 : 1, bs = String(b.it.name||'').toLowerCase().startsWith(t) ? 0 : 1;
+      return as-bs || String(a.it.name||'').localeCompare(String(b.it.name||''));
+    });
+}
+function reqResultsHtml(){
+  if(String(reqForm.q||'').trim().length < 2)
+    return '<div class="sub" style="margin:0 0 14px">Type at least 2 letters of the name, or the reference or barcode.</div>';
+  const all = reqSearchItems(reqForm.q), shown = all.slice(0,40);
+  if(!all.length) return '<div class="sub" style="margin:0 0 14px">Nothing in the inventory matches. If we don\'t stock it, use <strong>Type the item</strong> instead.</div>';
+  return `<div style="border:1px solid var(--line);border-radius:10px;overflow:hidden;margin-bottom:14px;background:var(--card);max-height:320px;overflow-y:auto">
+    ${shown.map(({it,ix})=>`<div class="reqhit" onclick="reqPick('${it._row||''}',${ix})" style="padding:9px 13px;border-bottom:1px solid var(--line);cursor:pointer">
+      <strong>${monEsc(it.name)}</strong>
+      <div class="code" style="font-size:12px;color:var(--ink-soft)">Ref ${monEsc(reqItemRef(it)||'—')} · ${TRACKER_LABEL[it.tracker]||it.tracker}${it.loc?' · '+monEsc(it.loc):''} · in stock: ${it.qty} ${monEsc(it.unit||'')}</div></div>`).join('')}
+    ${all.length>shown.length?`<div style="padding:8px 13px;font-size:12.5px;color:var(--ink-soft)">Showing the first ${shown.length} of ${all.length} — type more to narrow it down.</div>`:''}
+  </div>`;
+}
+// typing repaints only the result list, so the cursor stays in the search box
+function reqPaintResults(){ const el = document.getElementById('reqResults'); if(el) el.innerHTML = reqResultsHtml(); }
+function reqPick(row, ix){
+  const it = (row && state.items.find(i=>i._row===row)) || state.items[ix];
+  if(!it) return;
+  reqForm.pick = {itemId:it._row||null, name:String(it.name||''), ref:reqItemRef(it), tracker:it.tracker, loc:String(it.loc||''), unit:String(it.unit||'')};
+  render();
+  requestAnimationFrame(()=>{ const el=document.getElementById('reqQty'); if(el && el.focus){ el.focus(); if(el.select) el.select(); } });
+}
+function reqClearPick(){ reqForm.pick = null; render(); }
+function reqStockNow(itemId){ const it = itemId ? state.items.find(i=>i._row===itemId) : null; return it ? it.qty+' '+(it.unit||'') : null; }
+function reqStockForm(){
+  const p = reqForm.pick, inp = 'padding:8px 10px;border:1px solid var(--line);border-radius:8px', lbl = 'display:block;font-size:12px;color:var(--ink-soft);font-weight:600;margin-bottom:5px';
+  if(!p) return `<div class="toolrow" style="margin-bottom:8px">
+      <input id="reqSearch" type="search" placeholder="Search the inventory: name, reference or barcode…" value="${monEsc(reqForm.q)}"
+        oninput="reqForm.q=this.value;reqPaintResults()" style="flex:1;min-width:240px;${inp}">
+    </div>
+    <div id="reqResults">${reqResultsHtml()}</div>`;
+  const now = reqStockNow(p.itemId);
+  return `<div class="gaspanel" style="border-color:var(--pine)">
+    <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:flex-end">
+      <div style="flex:2;min-width:220px"><span style="${lbl}">Item</span><strong>${monEsc(p.name)}</strong>
+        <div class="code" style="font-size:12.5px;color:var(--ink-soft)">Ref ${monEsc(p.ref||'—')} · ${TRACKER_LABEL[p.tracker]||p.tracker}${p.loc?' · '+monEsc(p.loc):''}${now!==null?' · in stock now: '+monEsc(now):''}</div></div>
+      <div><label for="reqBy" style="${lbl}">Your name</label><input id="reqBy" type="text" placeholder="Your name" value="${monEsc(myName||'')}" style="${inp}"></div>
+      <div><label for="reqQty" style="${lbl}">Quantity</label><input id="reqQty" type="number" min="1" value="1" style="width:90px;${inp}"
+        onkeydown="if(event.key==='Enter'){event.preventDefault();addRequest();}"></div>
+      <button class="btn primary" onclick="addRequest()">Submit request</button>
+      <button class="btn" onclick="reqClearPick()">Choose a different item</button>
+    </div></div>`;
+}
+// under a request's item name: its reference, when it was picked from the inventory
+function reqRefLine(r, withStock){
+  if(!r.itemCode && !r.itemId) return '';
+  const now = withStock ? reqStockNow(r.itemId) : null;
+  return `<div class="code" style="font-size:12px;color:var(--ink-soft)">Ref ${monEsc(r.itemCode||'—')}${r.tracker?' · '+(TRACKER_LABEL[r.tracker]||monEsc(r.tracker)):''}${now!==null?' · in stock now: '+monEsc(now):''}</div>`;
+}
 function reqStartEditCell(ix, field){
   if(!can('respond')) return;
   _reqEditCell = {ix, field}; render();
@@ -1787,7 +1877,7 @@ function requestsView(){
   const done = state.requests.map((r,ix)=>({r,ix})).filter(x=>isDone(x.r.status));
 
   const openRows = open.map(({r,ix})=>`<tr>
-      <td data-label="">${reqEditableCell(r,ix,'item','<strong>'+r.item+'</strong>','text')}${r.size?' <span class="code" style="font-size:12px">('+r.size+')</span>':''}</td>
+      <td data-label="">${reqEditableCell(r,ix,'item','<strong>'+r.item+'</strong>','text')}${r.size?' <span class="code" style="font-size:12px">('+r.size+')</span>':''}${reqRefLine(r,true)}</td>
       <td data-label="Requested">${reqEditableCell(r,ix,'ts', r.ts?new Date(r.ts).toLocaleDateString('en-GB'):'—', 'date')} · ${r.by}</td>
       <td class="qty" data-label="Qty">${reqEditableCell(r,ix,'qty', r.qty, 'number')}</td>
       <td data-label="Status">${reqEditableCell(r,ix,'status', '<span class="badge '+reqStatusBadgeClass(r.status)+'">'+r.status+'</span>', 'text')}
@@ -1800,7 +1890,7 @@ function requestsView(){
         </select>`:'—'}</td></tr>`).join('');
 
   const doneRows = done.map(({r})=>`<tr>
-      <td data-label=""><strong>${r.item}</strong>${r.size?' ('+r.size+')':''}</td>
+      <td data-label=""><strong>${r.item}</strong>${r.size?' ('+r.size+')':''}${reqRefLine(r,false)}</td>
       <td data-label="Requested">${r.ts?new Date(r.ts).toLocaleDateString('en-GB'):''} · ${r.by}</td>
       <td class="qty" data-label="Qty">${r.qty}</td>
       <td data-label="Outcome"><span class="badge b-ok">${r.status}</span></td>
@@ -1808,14 +1898,18 @@ function requestsView(){
       <td data-label="Remarks">${r.remarks||'—'}</td></tr>`).join('');
 
   return `<h1>Requests</h1>
-    <div class="sub">Surgeons and assistants request items we don't stock; the stock team responds below. Date requested is recorded automatically.</div>
-    <div class="toolrow">
+    <div class="sub">Ask for something we don't stock by typing it, or pick an item from the inventory to ask for more of it. The stock team responds below. Date requested is recorded automatically.</div>
+    <div class="toolrow" style="margin-bottom:10px">
+      <div class="chip ${reqForm.mode==='type'?'on':''}" onclick="reqSetMode('type')">✎ Type the item</div>
+      <div class="chip ${reqForm.mode==='stock'?'on':''}" onclick="reqSetMode('stock')">🔍 Pick from inventory</div>
+    </div>
+    ${reqForm.mode==='stock' ? reqStockForm() : `<div class="toolrow">
       <input id="reqBy" type="text" placeholder="Your name" value="${myName||''}" style="padding:8px 10px;border:1px solid var(--line);border-radius:8px">
       <input id="reqItem" type="text" placeholder="Details of item requested" style="flex:2;min-width:180px;padding:8px 10px;border:1px solid var(--line);border-radius:8px">
       <input id="reqQty" type="number" min="1" value="1" title="Quantity" style="width:80px;padding:8px 10px;border:1px solid var(--line);border-radius:8px">
       <input id="reqSize" type="text" placeholder="Size (if applicable)" style="width:140px;padding:8px 10px;border:1px solid var(--line);border-radius:8px">
       <button class="btn primary" onclick="addRequest()">Submit request</button>
-    </div>
+    </div>`}
     <h1 style="font-size:16px">Open requests</h1>
     <table><thead><tr><th>Item</th><th>Requested</th><th class="qty">Qty</th><th>Status</th><th>Remarks</th><th>Stock team</th></tr></thead>
     <tbody>${openRows||'<tr><td colspan="6" style="color:var(--ink-soft)">No open requests.</td></tr>'}</tbody></table>
@@ -1825,17 +1919,23 @@ function requestsView(){
     <tbody>${doneRows||'<tr><td colspan="6" style="color:var(--ink-soft)">Nothing completed yet.</td></tr>'}</tbody></table>`;
 }
 function addRequest(){
+  const stockMode = reqForm.mode==='stock';
+  const pick = stockMode ? reqForm.pick : null;
+  if(stockMode && !pick){ toast('Choose an item from the inventory first'); return; }
   const by = $('#reqBy').value.trim();
-  const item = $('#reqItem').value.trim();
-  if(!by || !item){ toast('Name and item details are required'); return; }
+  const item = pick ? pick.name : $('#reqItem').value.trim();
+  if(!by || !item){ toast(pick ? 'Your name is required' : 'Name and item details are required'); return; }
   if(!myName && by){ myName=by; try{localStorage.setItem('bollin_name',myName);}catch(e){} paintName(); }
   const req = {_row:null, ts:new Date().toISOString(), by, item,
                qty:Math.max(1,parseInt($('#reqQty').value||'1',10)),
-               size:$('#reqSize').value.trim(), status:'Requested',
-               handledBy:'', responded:null, remarks:''};
+               size: pick ? '' : $('#reqSize').value.trim(), status:'Requested',
+               handledBy:'', responded:null, remarks:'',
+               itemId: pick ? pick.itemId : null, itemCode: pick ? pick.ref : '', tracker: pick ? pick.tracker : ''};
   state.requests.unshift(req);
+  if(pick){ reqForm.pick = null; reqForm.q = ''; }     // ready for the next item
   render(); toast('Request submitted');
-  if(LIVE) api({action:'request', by:req.by, item:req.item, qty:req.qty, size:req.size})
+  if(LIVE) api({action:'request', by:req.by, item:req.item, qty:req.qty, size:req.size,
+                itemId:req.itemId, itemCode:req.itemCode, tracker:req.tracker})
              .then(()=>loadAll())
              .catch(e=>toast('Request not saved — '+e.message));
 }
@@ -10263,7 +10363,8 @@ function dispatchToSheetRow(d){
 }
 function requestToSheetRow(r){
   return {_row: r.id, Timestamp: r.requested_at, By: r.requested_by, Item: r.item, Qty: r.qty, Size: r.size,
-    Status: r.status, HandledBy: r.handled_by, DateResponded: r.responded_at, Remarks: r.remarks};
+    Status: r.status, HandledBy: r.handled_by, DateResponded: r.responded_at, Remarks: r.remarks,
+    ItemId: r.item_id, ItemCode: r.item_code, Tracker: r.tracker};
 }
 function alertToSheetRow(a){
   return {_row: a.id, Timestamp: a.ts, Type: a.type, Tracker: a.tracker, Code: a.code, Item: a.name,
@@ -10553,8 +10654,13 @@ async function api(payload){
   }
 
   if(a==='request'){
-    const {error} = await sb.from('stock_requests').insert({requested_by: payload.by, item: payload.item,
-      qty: payload.qty, size: strOrNull(payload.size)});
+    const row = {requested_by: payload.by, item: payload.item, qty: payload.qty, size: strOrNull(payload.size)};
+    // picked from the inventory: keep the item's reference with the request. A typed request
+    // sends none of these (so it also still saves against a database without the new columns).
+    if(payload.itemId || payload.itemCode){
+      row.item_id = payload.itemId || null; row.item_code = strOrNull(payload.itemCode); row.tracker = strOrNull(payload.tracker);
+    }
+    const {error} = await sb.from('stock_requests').insert(row);
     if(error) throw new Error(error.message);
     return {ok:true};
   }
@@ -10934,7 +11040,8 @@ async function loadAll(){
       note:t.Note||''}));
     state.requests = data.requests.map(r=>({_row:r._row, ts:r.Timestamp, by:r.By,
       item:r.Item, qty:r.Qty, size:r.Size||'', status:r.Status||'Requested',
-      handledBy:r.HandledBy||'', responded:r.DateResponded||null, remarks:r.Remarks||''}));
+      handledBy:r.HandledBy||'', responded:r.DateResponded||null, remarks:r.Remarks||'',
+      itemId:r.ItemId||null, itemCode:r.ItemCode!=null?String(r.ItemCode):'', tracker:r.Tracker?String(r.Tracker):''}));
     state.implants = (data.implants||[]).map(m=>({_row:m._row, ts:m.Timestamp,
       initials:m.PatientInitials||'', pat:m.PATNumber||'', surgeon:m.Surgeon||'',
       surgeryDate:m.SurgeryDate||null, details:m.ImplantDetails||'',
