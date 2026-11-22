@@ -92,6 +92,15 @@ theatre lists depend on it. The working mantra throughout the build has been:
   SharePoint Excel `Table1` (23 columns, mapped by `TW_COL`). The Worker has no delete action;
   orphan rows must be removed by hand in Excel. **Staging uses the same Worker, so Theatre &
   Ward entries made on staging land in the REAL SharePoint file.**
+  - **The Worker's code is `cloudflare/theatre-worker.js`** (public, no secrets). The Microsoft
+    details are Worker settings (`CLIENT_SECRET` encrypted, `TENANT_ID`, `CLIENT_ID`,
+    `DRIVE_HOST`, `SITE_PATH`, `FILE_NAME`, `TABLE_NAME`).
+  - **Who may use it:** only the production and staging sites, and only someone signed in with
+    the `tw.view` permission. The page sends its Supabase token (`twHeaders`); the Worker asks
+    the project that issued it (`app_can('tw.view')`), so a deactivated or unticked person is
+    refused at once. `REQUIRE_LOGIN = "1"` enforces this and must stay on.
+  - **Keep Worker preview URLs off:** an older version's preview address would not be locked.
+  - A failed read or write is reported as failed, never as an empty sheet or "saved".
 - **Hosting:** GitHub Pages.
   - Production: repo `bollinclinic/invento` (git remote `origin`), branch `main` → custom
     domain `bollin.hashirhub.uk` (Cloudflare CNAME, **DNS-only / grey cloud**).
@@ -600,9 +609,10 @@ screen here, with a way to change **one person's** access without changing their
   - **Rules that only ask "is this an active account" were left alone on purpose** (the reads
     every screen needs to load), so unticking a page for someone can never stop the app loading
     for them: their page is hidden and the server refuses their writes there.
-  - `tw.view`, `monitor.view`, `dashboard.view`, `log.view` and `stocktake.sheet` have
-    `server = false`: nothing in this database stands behind them (SharePoint, the Google
-    Sheet, or a page-only feature), so a tick there only hides or shows the page.
+  - `monitor.view`, `dashboard.view`, `log.view` and `stocktake.sheet` have `server = false`:
+    nothing in this database stands behind them (the Google Sheet, or a page-only feature), so
+    a tick there only hides or shows the page. `tw.view` is enforced by the SharePoint Worker
+    (migration `20261122100000_tw_view_enforced.sql`).
   - `users.manage` is locked: Users & roles and the Security group can never be ticked for
     anyone. A developer's own access can never be reduced.
   - `security_get()` and `security_set_user(user, ticks)` are developer-only; every change is
@@ -967,6 +977,8 @@ Regression suites live in **`tests/`** and run with `node tests/run_all.js`:
 - free-form labels, sticker print order and dashboard tiles (`labels_tests.js`): the label
   layout with a fake ruler (wrapping, shrinking, pictures, codes), the sheet (copies, start
   position), what is remembered, the PDF, the five print orders, and each tile's figures;
+- SharePoint Worker: `tests/worker_tests.mjs` runs `cloudflare/theatre-worker.js` with fake
+  Supabase and Microsoft services (sign-in, allowed sites, bad rows, failed reads and writes);
 - anaesthetic checks: `tests/anaes_browser_tests.js` (checks in `anaes_page_tests.js`), in
   headless Chrome with a fake Supabase client and `fetch` replaced by a recorder. It covers the
   exact records sent, the 21-day rule, problems being sent as "action needed", missing answers,

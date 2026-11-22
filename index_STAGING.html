@@ -1836,7 +1836,8 @@ function dashboardView(){
   const pend = state.requests.filter(r=>r.status==='Requested').length;
   const impOrdered = state.implants.filter(i=>i.status==='Ordered'||i.status==='Pending').length;
   const impAwaitRet = state.implants.filter(i=>i.status==='Delivered' && !i.returnDetails).length;
-  if(twDashCountsDate !== todayISO()) twRefreshDashCounts();   // fire-and-forget; patches its own tile when it resolves
+  const twOn = viewAllowed('theatreward');   // the Worker refuses anyone without this permission
+  if(twOn && twDashCountsDate !== todayISO()) twRefreshDashCounts();   // fire-and-forget; patches its own tile when it resolves
   const intro = dashIntro();   // the tiles arrive one by one, once, after a sign-in
   const instExp = instExpiring();
   const impDelivered = state.implants.filter(i=>i.status==='Delivered').length;
@@ -1853,7 +1854,7 @@ function dashboardView(){
       ${can('values')?dashTile({tone:'green', badge:'£', art:'🪙', nav:"nav('values')", n:'£'+val.toFixed(0), label:`Stock value (${costed} of ${stock.length} items costed)`, viz:dashBar(stock.length ? costed/stock.length*100 : 0, costed + ' of ' + stock.length + ' items have a cost', true)}):''}
       ${dashTile({tone:'blue', badge:'💬', art:'✉️', nav:"nav('requests')", n:pend, pill:pend?'Awaiting':'Clear', label:'Requests awaiting response', viz:dashBar(state.requests.length ? (state.requests.length-pend)/state.requests.length*100 : 0, (state.requests.length-pend) + ' of ' + state.requests.length + ' requests answered')})}
       ${can('implants')?dashTile({tone:'green', badge:'🔩', art:'🦴', nav:"nav('implants')", n:impOrdered, label:`Implants ordered · ${impAwaitRet} awaiting return`, viz:dashBar(impDelivered ? (impDelivered-impAwaitRet)/impDelivered*100 : 0, (impDelivered-impAwaitRet) + ' of ' + impDelivered + ' delivered implants returned or used')}):''}
-      <div id="twDischargeTileWrap">${twDischargeTileHtml()}</div>
+      ${twOn?`<div id="twDischargeTileWrap">${twDischargeTileHtml()}</div>`:''}
       ${samplesAwaitingTile()}
     </div>
     <h1 style="font-size:16px">Needs attention</h1>
@@ -10469,21 +10470,32 @@ function twFieldValue(col){
   return '';
 }
 
+// The Worker only answers someone signed in with the Theatre & Ward permission
+// (cloudflare/theatre-worker.js), so every request carries this person's sign-in.
+async function twHeaders(json){
+  const h = json ? {'Content-Type':'application/json'} : {};
+  if(LIVE){
+    const {data} = await sb.auth.getSession();          // renews the sign-in if it has expired
+    const t = data && data.session && data.session.access_token;
+    if(t) h.Authorization = 'Bearer ' + t;
+  }
+  return h;
+}
 async function twGetRows(){
-  const resp = await fetch(THEATRE_WORKER_URL + '?action=getRows');
+  const resp = await fetch(THEATRE_WORKER_URL + '?action=getRows', {headers: await twHeaders(false)});
   const data = await resp.json();
   if(!data.ok) throw new Error(data.error || 'Failed to get rows');
   return data.rows;
 }
 async function twAddRow(values){
-  const resp = await fetch(THEATRE_WORKER_URL, { method:'POST', headers:{'Content-Type':'application/json'},
+  const resp = await fetch(THEATRE_WORKER_URL, { method:'POST', headers: await twHeaders(true),
     body: JSON.stringify({ action:'addRow', values }) });
   const data = await resp.json();
   if(!data.ok) throw new Error(data.error || 'Failed to add row');
   return data;
 }
 async function twUpdateRow(index, values){
-  const resp = await fetch(THEATRE_WORKER_URL, { method:'POST', headers:{'Content-Type':'application/json'},
+  const resp = await fetch(THEATRE_WORKER_URL, { method:'POST', headers: await twHeaders(true),
     body: JSON.stringify({ action:'updateRow', index, values }) });
   const data = await resp.json();
   if(!data.ok) throw new Error(data.error || 'Failed to update row');
