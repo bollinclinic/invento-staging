@@ -11012,6 +11012,7 @@ let twSurgeriesToday = null;   // null = not yet fetched this page load
 let twDischargeCount = null;
 let twDashCountsDate = null;   // the date these two counts were last computed FOR
 async function twRefreshDashCounts(){
+  if(LIVE && !session) return;   // the Worker needs a sign-in; the dashboard asks again once there is one
   const today = todayISO();
   twDashCountsDate = today;
   try{
