@@ -10308,6 +10308,7 @@ function twBlankInstance(){
     rowDateAlts: [],        // a date this screen just replaced, until SharePoint's reads catch up
     isNewRecord: false,     // "New record" was chosen for a patient who already has records
     pick: null,             // a choice waiting on screen, see twPickHtml
+    timeProblem: null,      // the first time that runs backwards, see twTimeProblem
   };
 }
 let _twByRoom = {};                      // Theatre role: room name -> its own instance
@@ -10425,6 +10426,7 @@ function twSaveDraft(){
   if(inst.isNewRecord) d._new = true;
   inst.draft = d;
   try{ localStorage.setItem(inst.draftKey, JSON.stringify(d)); }catch(e){}
+  twRefreshTimeError(inst);
   twScheduleAutosave();
 }
 function twClearDraft(inst){
@@ -10444,10 +10446,61 @@ function twSetNow(id){
   el.value = String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0');
   twSaveDraft();   // programmatically setting .value doesn't fire onchange, so save the draft ourselves
 }
+// Times run forwards: each one filled in must be the same as or later than the one before it. The
+// one exception is the discharge time of a patient who went home on a later day. A form only
+// answers for pairs it can edit, so ward staff are never stuck on a theatre time they can't change.
+const TW_TIME_CHAIN = [['timeSent','Time sent'],['intoTheatre','Into theatre'],['anaStarted','Anaesthetic started'],
+  ['anaReady','Anaesthetic ready'],['knifeToSkin','Knife to skin'],['finishedSuturing','Finished suturing'],['intoRecovery','Into recovery'],
+  ['outRecovery','Time out of recovery'],['intoWard','Time into ward'],['timeDischarge','Time of discharge']];
+const TW_THEATRE_TIMES = 7;     // the first seven are on the theatre form, the rest on the ward form
+function twTimeMinutes(col, raw){
+  const m = /^(\d{1,2}):(\d{2})/.exec(String(twCellDisplay(col, raw)).trim());
+  return m ? Number(m[1])*60 + Number(m[2]) : null;
+}
+function twClock(mins){ return String(Math.floor(mins/60)).padStart(2,'0')+':'+String(mins%60).padStart(2,'0'); }
+function twTimeProblem(row, side){
+  const op = twRowDateOf(row);
+  const out = String(twCellDisplay(TW_COL.dateDischarge, row[TW_COL.dateDischarge]) || '').trim();
+  const isDay = d => /^\d{4}-\d{2}-\d{2}$/.test(d);
+  if(side === 'ward' && isDay(op) && isDay(out) && out < op){
+    return {id:'tw_dateDischarge', text:'Date of discharge cannot be before the date of the operation ('+twDateText(op)+')'};
+  }
+  let prev = null;
+  for(let i = 0; i < TW_TIME_CHAIN.length; i++){
+    const [key, label] = TW_TIME_CHAIN[i], col = TW_COL[key];
+    const t = twTimeMinutes(col, row[col]);
+    if(t === null) continue;
+    if(key === 'timeDischarge' && out && out !== op) continue;      // went home on a later day
+    if(prev && t < prev.t && (side === 'ward' ? i >= TW_THEATRE_TIMES : prev.i < TW_THEATRE_TIMES)){
+      const hint = key === 'timeDischarge' ? '. If the patient went home on a later day, enter the Date of discharge' : '';
+      return {id:'tw_'+(side === 'theatre' && i >= TW_THEATRE_TIMES ? prev.key : key),
+        text: label+' ('+twClock(t)+') cannot be earlier than '+prev.label+' ('+twClock(prev.t)+')'+hint};
+    }
+    prev = {t, i, key, label};
+  }
+  return null;
+}
+function twFormSide(inst){ return inst === twWardInstance ? 'ward' : 'theatre'; }
+function twTimeErrHtml(inst){
+  const p = inst.timeProblem;
+  return `<div id="twTimeErr" style="color:var(--red);font-weight:600;font-size:13px;margin-top:6px">${p ? '⚠ '+twEsc(p.text) : ''}</div>`;
+}
+function twRefreshTimeError(inst){
+  const p = twTimeProblem(twBuildAutosaveRow(inst), twFormSide(inst));
+  inst.timeProblem = p;
+  if(inst !== twActive) return;
+  const box = document.getElementById('twTimeErr');
+  if(box) box.innerHTML = p ? '⚠ '+twEsc(p.text) : '';
+  TW_TIME_CHAIN.map(([key]) => 'tw_'+key).concat('tw_dateDischarge').forEach(id => {
+    const el = document.getElementById(id);
+    if(el && el.style) el.style.borderColor = p && p.id === id ? 'var(--red)' : 'var(--line)';
+  });
+}
+function twTimeBorder(id){ const p = twActive && twActive.timeProblem; return p && p.id === id ? 'var(--red)' : 'var(--line)'; }
 function twTimeFieldHtml(id, label, value, chg){
   return `<div class="fld"><label>${label}</label>
     <div style="display:flex;gap:6px">
-      <input id="${id}" type="time" value="${value}"${chg} style="padding:10px 12px;border:1px solid var(--line);border-radius:9px">
+      <input id="${id}" type="time" value="${value}"${chg} style="padding:10px 12px;border:1px solid ${twTimeBorder(id)};border-radius:9px">
       <button type="button" class="btn" onclick="twSetNow('${id}')" title="Fill in the current time" style="padding:8px 10px;font-size:12px;white-space:nowrap">Now</button>
     </div></div>`;
 }
@@ -10533,6 +10586,7 @@ function twForgetRecord(inst){
   inst.rowDateAlts = [];
   inst.isNewRecord = false;
   inst.pick = null;
+  inst.timeProblem = null;
 }
 // After a write: this is now the record's date. The old one stays acceptable until reads catch up.
 function twNoteRowDate(inst, row){
@@ -10707,6 +10761,12 @@ function twScheduleAutosave(){
     twRefreshAutosaveBadge(inst);
     return;
   }
+  if(inst.timeProblem){      // a time that runs backwards never reaches SharePoint
+    clearTimeout(inst.autosaveTimer);
+    inst.autosaveState = 'badtime';
+    twRefreshAutosaveBadge(inst);
+    return;
+  }
   inst.autosaveState = 'pending';
   twRefreshAutosaveBadge(inst);
   clearTimeout(inst.autosaveTimer);
@@ -10764,7 +10824,7 @@ async function twAutosaveNow(inst){
   if(pid !== String(inst.currentPid).trim()){ inst.autosaveState = 'pidchanged'; twRefreshAutosaveBadge(inst); return; }
   inst.autosaveState = 'saving';
   twRefreshAutosaveBadge(inst);
-  let skipped = false;
+  let skipped = false, badTime = false;
   try{
     await twSerializeWrite(inst, async () => {
       // While this waited its turn the screen may have moved on to another record.
@@ -10772,6 +10832,7 @@ async function twAutosaveNow(inst){
       // Built inside the queued job, not before it -- so if this had to wait its turn behind
       // another write, it still reflects the latest draft rather than a stale snapshot.
       const rowData = twBuildAutosaveRow(inst);
+      if(twTimeProblem(rowData, twFormSide(inst))){ badTime = true; return; }
       const { index, existing } = await twResolveRow(inst, pid);
       if(index >= 0){
         twKeepIdentity(rowData, existing);
@@ -10784,7 +10845,7 @@ async function twAutosaveNow(inst){
       // vanished after having been confirmed). Autosave NEVER creates a row -- do nothing and
       // let the next explicit Save or lookup sort it out, rather than risk a duplicate.
     });
-    inst.autosaveState = skipped ? null : 'saved';
+    inst.autosaveState = badTime ? 'badtime' : (skipped ? null : 'saved');
   }catch(e){
     inst.autosaveState = e && e.twMoved ? 'moved' : 'error';
   }
@@ -10798,7 +10859,8 @@ function twAutosaveStatusHtml(){
     saved:   ['✓ All changes saved to SharePoint', 'var(--pine)'],
     error:   ['⚠ Autosave failed — check your connection (your entry is still kept on this device)', 'var(--red)'],
     moved:   ['⚠ Not saved — this record changed elsewhere. Look the patient up again (your entry is kept on this device)', 'var(--red)'],
-    pidchanged: ['⚠ Patient number changed — press "Save Theatre Record" to choose what to do', 'var(--red)']
+    pidchanged: ['⚠ Patient number changed — press "Save Theatre Record" to choose what to do', 'var(--red)'],
+    badtime: ['⚠ Not saved — correct the time shown in red (your entry is kept on this device)', 'var(--red)']
   };
   const m = map[twActive.autosaveState];
   return `<span id="twAutosaveStatus" style="font-size:12.5px;color:${m?m[1]:'var(--ink-soft)'};margin-left:10px">${m?m[0]:''}</span>`;
@@ -11088,6 +11150,18 @@ async function twSubmitTheatre(opts){
   if(!surgeonRes.ok){ toast('Select a surgeon from the list, or clear the field'); return; }
   const surgeon2Res = twResolveSurgeonName('twSurgeon2', inst.loadedRow ? inst.loadedRow[TW_COL.surgeon2] : '');
   if(!surgeon2Res.ok){ toast('Select the second surgeon from the list, or clear the field'); return; }
+  const timeRow = (opts.mode === 'asNew' ? [] : (inst.loadedRow || [])).slice();
+  while(timeRow.length < TW_TOTAL_COLS) timeRow.push('');
+  timeRow[TW_COL.date] = date;
+  TW_TIME_CHAIN.slice(0, TW_THEATRE_TIMES).forEach(([key]) => { timeRow[TW_COL[key]] = twVal('tw_'+key); });
+  const timeBad = twTimeProblem(timeRow, 'theatre');
+  if(timeBad){
+    inst.timeProblem = timeBad;
+    inst.status = {level:'red', text:'Not saved — '+timeBad.text};
+    toast('⚠ '+timeBad.text);
+    render();
+    return;
+  }
   // A different number on an open record could be a correction or a new patient: never guess.
   if(inst.currentPid && inst.loadedRow && pid !== String(inst.currentPid).trim() && !opts.mode){
     inst.pick = {kind:'pidchange', pid, oldPid:inst.currentPid, mode:'', rows:[]};
@@ -11213,14 +11287,26 @@ async function twSubmitWard(){
   const inst = twActive;
   if(!inst.currentPid){ toast('Look up a patient first — the theatre record must already exist'); return; }
   const pid = inst.currentPid;
-  const btn = document.getElementById('twWardSaveBtn');
-  if(btn){ btn.disabled = true; btn.textContent = 'Saving…'; }
   // Captured at click time, same reasoning as the theatre save above -- a wait behind another
   // queued write must not pick up further edits made while this one is waiting its turn.
   const outRecovery   = twVal('tw_outRecovery');
   const intoWard      = twVal('tw_intoWard');
   const timeDischarge = twVal('tw_timeDischarge');
   const dateDischarge = twVal('tw_dateDischarge');
+  const timeRow = (inst.loadedRow || []).slice();
+  while(timeRow.length < TW_TOTAL_COLS) timeRow.push('');
+  timeRow[TW_COL.outRecovery] = outRecovery; timeRow[TW_COL.intoWard] = intoWard;
+  timeRow[TW_COL.timeDischarge] = timeDischarge; timeRow[TW_COL.dateDischarge] = dateDischarge;
+  const timeBad = twTimeProblem(timeRow, 'ward');
+  if(timeBad){
+    inst.timeProblem = timeBad;
+    inst.status = {level:'red', text:'Not saved — '+timeBad.text};
+    toast('⚠ '+timeBad.text);
+    render();
+    return;
+  }
+  const btn = document.getElementById('twWardSaveBtn');
+  if(btn){ btn.disabled = true; btn.textContent = 'Saving…'; }
   let savedName = pid;
   try{
     // Look-up-then-write goes through this instance's own queue (see twSerializeWrite) so this
@@ -11312,6 +11398,7 @@ function twTheatreFormHtml(){
   const surgeonVal = g(TW_COL.surgeonName);
   const surgeon2Val = g(TW_COL.surgeon2);
   const chg = ' onchange="twSaveDraft()"';
+  inst.timeProblem = twTimeProblem(twBuildAutosaveRow(inst), 'theatre');
   return `
     ${(inst.draft.tw_pid)?`<div class="sub" style="color:var(--amber)">Showing an unsaved draft you were working on — nothing has been lost.</div>`:''}
     <div class="gaspanel">
@@ -11358,6 +11445,7 @@ function twTheatreFormHtml(){
            ['anaReady','Anaesthetic ready'],['knifeToSkin','Knife to skin'],['finishedSuturing','Finished suturing'],
            ['intoRecovery','Into recovery']].map(([key,label])=>twTimeFieldHtml('tw_'+key, label, g(TW_COL[key]), chg)).join('')}
       </div>
+      ${twTimeErrHtml(inst)}
       <div style="display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin-top:6px">
         <button class="btn primary" id="twTheatreSaveBtn" onclick="twSubmitTheatre()">Save Theatre Record</button>
         ${twAutosaveStatusHtml()}
@@ -11380,6 +11468,7 @@ function twWardFormHtml(){
   const g = twFieldValue;                            // editable ward fields -- draft-first, same as the theatre form
   const chg = ' onchange="twSaveDraft()"';
   const field = (label,val) => `<div><div style="font-size:12px;color:var(--ink-soft)">${label}</div><strong>${val||'—'}</strong></div>`;
+  inst.timeProblem = twTimeProblem(twBuildAutosaveRow(inst), 'ward');
   return `
     ${(inst.draft.tw_pid===String(rg(TW_COL.pid)))?`<div class="sub" style="color:var(--amber)">Showing an unsaved draft you were working on — nothing has been lost.</div>`:''}
     <div class="gaspanel">
@@ -11403,8 +11492,9 @@ function twWardFormHtml(){
         ${twTimeFieldHtml('tw_intoWard', 'Time into ward', g(TW_COL.intoWard), chg)}
         ${twTimeFieldHtml('tw_timeDischarge', 'Time of discharge', g(TW_COL.timeDischarge), chg)}
         <div class="fld"><label>Date of discharge</label><input id="tw_dateDischarge" type="date" value="${g(TW_COL.dateDischarge)}"${chg}
-          style="padding:10px 12px;border:1px solid var(--line);border-radius:9px"></div>
+          style="padding:10px 12px;border:1px solid ${twTimeBorder('tw_dateDischarge')};border-radius:9px"></div>
       </div>
+      ${twTimeErrHtml(inst)}
       <div style="display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin-top:6px">
         <button class="btn primary" id="twWardSaveBtn" onclick="twSubmitWard()">Save Ward Record</button>
         ${twAutosaveStatusHtml()}

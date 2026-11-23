@@ -391,6 +391,11 @@ same Google Sheet** (his choice over moving it to Supabase).
   - Editing the number on an open record stops autosave, and Save asks whether it is a correction
     or a new record. A number already used with another name or date of birth also asks first.
   - Date is required on Save. A blank box never wipes a saved record's Date or Theatre.
+  - **Times only run forwards** (`twTimeProblem`, `TW_TIME_CHAIN`, Yasar's rule): Time sent through
+    Time of discharge, the same minute allowed. The one exception is a discharge time when the
+    Date of discharge is a later day (overnight). A wrong time turns red as it is entered, and
+    neither Save nor autosave will write it. A form only answers for pairs it can edit, so ward
+    staff are never stuck on a theatre time, or theatre staff on a ward time.
 - Details: `bollin-clinic-project-notes.md` (git-ignored, local only).
 
 **Theatre rota** (superadmin+): replaces Ruby's transposed spreadsheet. Since the October 2026
