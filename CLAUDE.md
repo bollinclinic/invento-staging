@@ -101,6 +101,9 @@ theatre lists depend on it. The working mantra throughout the build has been:
     refused at once. `REQUIRE_LOGIN = "1"` enforces this and must stay on.
   - **Keep Worker preview URLs off:** an older version's preview address would not be locked.
   - A failed read or write is reported as failed, never as an empty sheet or "saved".
+  - **`fixCells`** (TML Report only, needs `tml.manage`): up to 25 single-cell corrections a request,
+    only for Theatre, Surgeon, Second Surgeon and Time sent to Time into recovery. A cell is written
+    only if that row still holds the same PAT, date and old value.
 - **Hosting:** GitHub Pages.
   - Production: repo `bollinclinic/invento` (git remote `origin`), branch `main` → custom
     domain `bollin.hashirhub.uk` (Cloudflare CNAME, **DNS-only / grey cloud**).
@@ -398,6 +401,31 @@ same Google Sheet** (his choice over moving it to Supabase).
     staff are never stuck on a theatre time, or theatre staff on a ward time.
 - Details: `bollin-clinic-project-notes.md` (git-ignored, local only).
 
+**TML Report** (developer only; Records; view `tml`; permission `tml.manage`, locked; migration
+`20261123100000_tml_report.sql`): per company, theatre over-runs plus billable items and services.
+- **Three tabs:** Run a report (Choose → Review → Report), Companies & surgeons, Item lists & prices.
+- **Contract terms and prices are never in this repo** (it is public). They live only in the `tml_*`
+  tables. A new company starts from the saved default terms (`tml_settings`).
+- **Sums:** `tmlBuild` has no screen or network, and tests run it directly. Screen, PDF, Excel and CSV
+  all draw from `tmlTables`.
+- **Over-runs** follow the original Excel formula: per theatre per day, from the last Time into
+  recovery. If the last patient has no recovery time, nothing is guessed and it is flagged.
+  - **A shared theatre** (anyone not in this report in that room that day, including a removed
+    private patient) is charged only on the company's own time past its shared-theatre allowance.
+  - Terms are per company, and a surgeon can have their own.
+- **Price order:** the list's own price for that date, then Services, then the price on the line at
+  the time. A line from before an item had a price is **not** charged at today's price: it is flagged
+  (`beforePrice`) until the list gives it a price. Unit cost is never charged, only compared.
+- **Lines match by item id**, because a rename once dropped money from the manual workbook.
+- **Patient data:** `tmlNormRows` drops name and date of birth as the sheet is read. Only initials
+  and PAT are kept, shown or exported.
+- **Review** fixes SharePoint in place (`tmlApply` → `fixCells`) and asks about look-alike surgeon
+  names. "Same" also combines them in `surgeons` and costing (`tml_name_decide`). "Different" is
+  remembered. A short name that could be two people is chosen row by row.
+- **Removals** (a patient, a day, a surgeon's list) need a reason, are remembered, and can be undone.
+- **Downloads:** PDF whole or per section, one Excel file with 4 tabs (`tmlZip`, no library), and a
+  CSV per tab.
+
 **Theatre rota** (superadmin+): replaces Ruby's transposed spreadsheet. Since the October 2026
 redesign (migrations `20261016100000_rota_people_model.sql` and
 `20261016110000_rota_sms_labels.sql`), the rota has **two views of the same data**. More than one
@@ -604,7 +632,7 @@ accounts (`create-user`), reset password / set password / rename (`manage-user`)
 Users & roles; November 2026, migrations `20261116100000_security_groups.sql` and
 `20261116110000_security_my_ticks.sql`). Yasar asked for the inventory app's Security Groups
 screen here, with a way to change **one person's** access without changing their role.
-- **What it is:** a table of 38 named permissions (rows, grouped) against the five roles
+- **What it is:** a table of 39 named permissions (rows, grouped) against the five roles
   (columns). **The role columns are locked** (Yasar's choice): they show what each role has.
   Choosing a person (search by name, username or role) adds a column of ticks for them alone.
   A tick that differs from their role is "given" or "taken away"; "Reset to role" removes them
@@ -758,7 +786,7 @@ policies and RPCs.
 | Stocktake, implants, alerts, stock value, create/edit samples | | ✓ | ✓ | ✓ | ✓ |
 | Add/edit items, labels, stores/offsite/services, obsolete, assets, procedure financials & admin controls, delete specimen | | | ✓ | ✓ | ✓ |
 | Theatre rota, rota texts & staff mobiles, bulk item edit, physical stock-take sheet | | | | ✓ | ✓ |
-| Users & roles, billing report, item usage, procedure pre-fill | | | | | ✓ |
+| Users & roles, billing report, TML Report, item usage, procedure pre-fill | | | | | ✓ |
 
 **The table above is what each ROLE has. Since November 2026 a developer can also give or
 take away single permissions for one person (see §4 "Security group"),** so a person may have
@@ -825,6 +853,10 @@ then `20260930180000_rota_sms_night_team_time.sql`):
     conversion didn't flag anyone already texted.
 - **Tests:** `tests/sql/rota_sms_db_tests.sql` and `tests/sql/rota_people_db_tests.sql` run
   against staging and clean up after themselves.
+
+TML Report: `tml_companies`, `tml_company_surgeons`, `tml_lists`, `tml_list_items`, `tml_list_prices`
+(each price from a date), `tml_exclusions`, `tml_name_decisions`, `tml_settings`, `tml_fix_log`. RLS on,
+no policies: RPCs only, each checking `app_can('tml.manage')`.
 
 The SharePoint Theatre Records Excel is **not** in Supabase (see §3).
 
@@ -998,6 +1030,9 @@ Regression suites live in **`tests/`** and run with `node tests/run_all.js`:
 - free-form labels, sticker print order and dashboard tiles (`labels_tests.js`): the label
   layout with a fake ruler (wrapping, shrinking, pictures, codes), the sheet (copies, start
   position), what is remembered, the PDF, the five print orders, and each tile's figures;
+- TML Report: `tml_run_tests.js` (checks in `tml_tests.js`): the over-run rule minute by minute, shared
+  theatres, prices, removals, names, the review flow and the Excel file. Database side in
+  `tests/sql/tml_db_tests.sql` (staging only, rolled back);
 - SharePoint Worker: `tests/worker_tests.mjs` runs `cloudflare/theatre-worker.js` with fake
   Supabase and Microsoft services (sign-in, allowed sites, bad rows, failed reads and writes);
 - anaesthetic checks: `tests/anaes_browser_tests.js` (checks in `anaes_page_tests.js`), in
@@ -1013,7 +1048,7 @@ Regression suites live in **`tests/`** and run with `node tests/run_all.js`:
   that with no ticks every check equals the role, that a tick changes the tabs and what the page
   asks the server for from the next load, and it drives the Security group page. It also fails
   if `PERM_MIN` or any permission named on the page differs from the migration. Database side
-  in `tests/sql/security_db_tests.sql` (staging only): all 38 permissions x 5 roles equal the
+  in `tests/sql/security_db_tests.sql` (staging only): all 39 permissions x 5 roles equal the
   old levels, ticks really open and close the server rules, and only a developer can change them;
 - clinical monitoring: `tests/monitor_browser_tests.js`, also in headless Chrome. It puts the
   same entries through a copy of the **old page** (`tests/fixtures/`) and through the new one

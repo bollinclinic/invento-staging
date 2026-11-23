@@ -120,6 +120,7 @@
   nav a[data-view=offsite]{--icn:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 21V9l9-5 9 5v12'/%3E%3Cpath d='M9 21v-7h6v7'/%3E%3C/svg%3E")}
   nav a[data-view=services]{--icn:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='7' width='18' height='13' rx='2'/%3E%3Cpath d='M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M3 13h18'/%3E%3C/svg%3E")}
   nav a[data-view=billing]{--icn:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 3h14v18l-3-2-2 2-2-2-2 2-2-2-3 2z'/%3E%3Cpath d='M9 8h6M9 12h6M9 16h4'/%3E%3C/svg%3E")}
+  nav a[data-view=tml]{--icn:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 20V10M10 20V4M16 20v-7M22 20H2'/%3E%3C/svg%3E")}
   nav a[data-view=itemusage]{--icn:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='M21 21l-4.3-4.3'/%3E%3C/svg%3E")}
   nav a[data-view=security]{--icn:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6z'/%3E%3Cpath d='M9 12l2 2 4-4'/%3E%3C/svg%3E")}
   nav a[data-view=users]{--icn:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='9' cy='8' r='3.5'/%3E%3Cpath d='M2.5 20a6.5 6.5 0 0 1 13 0M16 4.5a3.5 3.5 0 0 1 0 7M18.5 20a6 6 0 0 0-2.5-5'/%3E%3C/svg%3E")}
@@ -748,6 +749,31 @@
     .tiles{grid-template-columns:1fr 1fr}
     .tile .n{font-size:20px}
   }
+  /* TML Report */
+  .tmltabs{border-bottom:1px solid var(--line);margin-bottom:14px;display:flex;gap:4px;flex-wrap:wrap}
+  .tmlsteps{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
+  .tmlsteps span{padding:5px 12px;border-radius:99px;border:1px solid var(--line);font-size:13px;font-weight:600;color:var(--ink-soft)}
+  .tmlsteps span.on{background:var(--pine);border-color:var(--pine);color:#fff}
+  .tmlbusy{padding:9px 12px;margin-bottom:12px;border:1px solid var(--line);border-radius:9px;font-weight:600}
+  .tmlchips,.tmlbtns{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+  .tmlchip{display:inline-flex;align-items:center;gap:6px;padding:5px 11px;border:1px solid var(--line);border-radius:99px;font-size:13px;cursor:pointer}
+  .tmlchip.on{border-color:var(--pine);font-weight:600}
+  .tmlchip em{font-weight:400;color:var(--ink-soft)}
+  .tmlcards{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:14px}
+  .tmlcard{padding:11px 13px;border:1px solid var(--line);border-radius:10px;background:var(--card);font-size:12.5px;color:var(--ink-soft)}
+  .tmlcard strong{display:block;margin-top:3px;font-size:18px;color:var(--ink)}
+  .tmlcard.strong{border-color:var(--pine);border-width:2px}
+  .tmlflag{border-left:4px solid var(--amber)}
+  .tmlflag.red{border-left-color:var(--red)}
+  .tmlline{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:6px 12px;padding:8px 0;border-top:1px solid var(--line)}
+  .tmlline span:first-child{min-width:0;overflow-wrap:anywhere}
+  .tmlfix{padding:10px 0;border-top:1px solid var(--line)}
+  .tmlwarn{color:var(--red);font-size:12.5px;font-weight:600}
+  .tmlneed{border-color:var(--red) !important}
+  .tmlwrap{overflow-x:auto;max-width:100%}
+  .tmltable{white-space:nowrap}
+  .tmltotal td{font-weight:800}
+  #main .tmlbtns input,#main .tmlbtns select{padding:7px 9px;border:1px solid var(--line);border-radius:8px}
 </style>
 </head>
 <body>
@@ -814,6 +840,7 @@
       <a href="#theatreward" data-view="theatreward">Theatre &amp; Ward</a>
       <a href="#services" data-view="services">Services</a>
       <a href="#billing" data-view="billing">Surgeon billing report</a>
+      <a href="#tml" data-view="tml">TML Report</a>
       <a href="#itemusage" data-view="itemusage" class="navdup">Item usage search</a>
     </div>
     <div class="navsec" data-navgrp="admin" role="button" tabindex="0" aria-expanded="true" aria-controls="navgrp-admin" onclick="toggleNavGroup('admin')" onkeydown="navGroupKey(event,'admin')"><span>Admin</span><span class="navchev" aria-hidden="true">▾</span></div>
@@ -11553,6 +11580,1056 @@ function theatreWardView(){
     ${twActive.pick && twActive.pick.kind==='records' ? '' : (twRole==='theatre' ? twTheatreFormHtml() : twWardFormHtml())}`;
 }
 
+/* ---------------- TML Report (developer only) ----------------
+   One report per company: theatre over-runs plus the billable items and services used.
+   Theatre times come from the SharePoint sheet (through the Worker), usage from procedure_lines,
+   and companies, lists, prices, removals and name decisions from the tml_* tables (RPCs only).
+   - Patient names and dates of birth are dropped as the sheet is read (tmlNormRows): only initials
+     and the PAT number are ever kept, shown or exported.
+   - A line is matched to its item by item id, so renaming an item can't lose money.
+   - Price order: the list's own price for that date, then Services, then the tracker's bill price.
+     The purchase price (unit cost) is never charged. It is only compared and shown.
+   - Over-runs are per theatre per day and follow the original Excel formula by default.
+   - Corrections go through the Worker's fixCells: one cell, only if the row still holds the same
+     patient, date and old value. */
+const TML_TIMES = TW_TIME_CHAIN.slice(0, TW_THEATRE_TIMES);
+const TML_TRACKERS = {consumables:'Consumables', meds:'Medicines', garments:'Garments', instruments:'Instruments', linen:'Linen', services:'Services'};
+const TML_PERIODS = [['today','Today'],['date','A date'],['week','A week'],['month','A month'],['custom','Custom dates']];
+const TML_FIX_MAX = 25;
+const tml = {
+  tab:'run', cfg:null, loading:false, error:'', busy:'',
+  form:{companyId:'', listId:'', mode:'month', day:'', week:'', month:'', from:'', to:''},
+  add:[], off:[], step:'setup', period:null, sheet:null, lines:[], report:null, show:'theatre',
+  pairs:[], either:[], rm:null, co:null, li:null
+};
+function tmlKey(v){ return String(v==null?'':v).trim().toLowerCase().replace(/\s+/g,' '); }
+function tmlBare(v){ return tmlKey(v).replace(/^(mr|mrs|ms|miss|dr|prof)\.?\s+/,''); }
+function tmlRound(n){ return Math.round((Number(n)||0)*100)/100; }
+function tmlMoney(n){ return '£'+(Number(n)||0).toLocaleString('en-GB',{minimumFractionDigits:2, maximumFractionDigits:2}); }
+function tmlHHMM(s){ const m = /^(\d{1,2}):(\d{2})/.exec(String(s||'')); return m ? Number(m[1])*60+Number(m[2]) : null; }
+function tmlDur(mins){ const m = Math.max(0, Math.round(mins)); return Math.floor(m/60)+'h '+String(m%60).padStart(2,'0')+'m'; }
+function tmlT(r, col){ const v = r.cells[col]; return v===0 ? null : twTimeMinutes(col, v); }
+function tmlCos(){ return (tml.cfg && tml.cfg.companies) || []; }
+function tmlLists(){ return (tml.cfg && tml.cfg.lists) || []; }
+function tmlCo(id){ return tmlCos().find(c=>c.id===id) || null; }
+function tmlList(id){ return tmlLists().find(l=>l.id===id) || null; }
+async function tmlRpc(name, args){
+  const {data, error} = await sb.rpc(name, args||{});
+  if(error) throw new Error(error.message);
+  return data;
+}
+
+/* ---- the sums (no screen, no network: the tests run these directly) ---- */
+function tmlPeriod(f, today){
+  const shift = (iso, days) => { const d = new Date(iso+'T12:00:00Z'); d.setUTCDate(d.getUTCDate()+days); return d.toISOString().slice(0,10); };
+  const t = today || todayISO();
+  if(f.mode==='today') return {from:t, to:t};
+  if(f.mode==='date') return f.day ? {from:f.day, to:f.day} : null;
+  if(f.mode==='week'){
+    if(!f.week) return null;
+    const mon = shift(f.week, -((new Date(f.week+'T12:00:00Z').getUTCDay()+6)%7));
+    return {from:mon, to:shift(mon, 6)};
+  }
+  if(f.mode==='month'){
+    if(!/^\d{4}-\d{2}$/.test(f.month||'')) return null;
+    const [y, m] = f.month.split('-').map(Number);
+    return {from:f.month+'-01', to:new Date(Date.UTC(y, m, 0)).toISOString().slice(0,10)};
+  }
+  return f.from && f.to && f.from <= f.to ? {from:f.from, to:f.to} : null;
+}
+function tmlAliases(names){
+  const m = {};
+  (names||[]).forEach(d=>{
+    if(d.decision!=='same' || !d.canonical) return;
+    [d.a, d.b].forEach(x=>{ if(tmlKey(x)!==tmlKey(d.canonical)) m[tmlKey(x)] = d.canonical; });
+  });
+  return m;
+}
+function tmlCanon(name, aliases){
+  let n = String(name==null?'':name).trim(), k = tmlKey(n), guard = 0;
+  while(aliases && aliases[k] && guard++ < 6){ n = aliases[k]; k = tmlKey(n); }
+  return n;
+}
+function tmlNormRows(workerRows, aliases){
+  return workerRows.map(r=>{
+    const c = r.values[0].slice();
+    while(c.length < TW_TOTAL_COLS) c.push('');
+    const initials = twInitials(c[TW_COL.patientName]);
+    c[TW_COL.patientName] = ''; c[TW_COL.dob] = '';      // never kept, shown or exported
+    return {index:r.index, cells:c, initials, date:twRowDateOf(c), room:String(c[TW_COL.theatreNumber]||'').trim(),
+      pid:String(c[TW_COL.pid]==null?'':c[TW_COL.pid]).trim(), procedure:String(c[TW_COL.procedure]||'').trim(),
+      surgeonRaw:String(c[TW_COL.surgeonName]||'').trim(), surgeon:tmlCanon(c[TW_COL.surgeonName], aliases)};
+  });
+}
+function tmlTermsOf(company, surgeon){
+  const base = {start:company.start||'', finish:company.finish, grace:Number(company.grace), rate:Number(company.rate),
+    maxHours:Number(company.maxHours), countFrom:company.countFrom||'finish', sharedHours:Number(company.sharedHours)};
+  const s = (company.surgeons||[]).find(x=>tmlKey(x.name)===tmlKey(surgeon));
+  if(!s || !s.terms) return base;
+  ['start','finish','countFrom'].forEach(k=>{ if(s.terms[k]) base[k] = s.terms[k]; });
+  ['grace','rate','maxHours','sharedHours'].forEach(k=>{
+    if(s.terms[k]!=='' && s.terms[k]!=null && isFinite(s.terms[k])) base[k] = Number(s.terms[k]);
+  });
+  return base;
+}
+// Excel: within the allowance + grace is free; past that, each started hour, counted from the
+// allowance (or from the end of the grace period if the contract says so), up to the maximum.
+function tmlCharge(mins, allowance, t){
+  const free = allowance + t.grace;
+  if(mins <= free) return {hours:0, amount:0};
+  const from = t.countFrom==='grace' ? free : allowance;
+  const hours = Math.min(t.maxHours, Math.ceil((mins-from)/60));
+  return {hours, amount:tmlRound(hours*t.rate)};
+}
+function tmlExcluded(ex, date, pat, surgeon){
+  return ex.find(x=>x.date===date && (x.kind==='day'
+    || (x.kind==='patient' && tmlKey(x.pat)===tmlKey(pat))
+    || (x.kind==='surgeon' && tmlKey(x.surgeon)===tmlKey(surgeon)))) || null;
+}
+function tmlDaily(own, periodRows, company){
+  const groups = new Map(), ownIdx = new Set(own.map(r=>r.index));
+  own.forEach(r=>{ const k = r.date+'|'+r.room; if(!groups.has(k)) groups.set(k, []); groups.get(k).push(r); });
+  const out = [];
+  groups.forEach(rows=>{
+    const {date, room} = rows[0];
+    const shared = !!room && periodRows.some(x=>x.date===date && x.room===room && !ownIdx.has(x.index));
+    const inT = r=>tmlT(r, TW_COL.intoTheatre), recT = r=>tmlT(r, TW_COL.intoRecovery);
+    const ins = rows.map(inT).filter(x=>x!=null), withRec = rows.filter(r=>recT(r)!=null);
+    const start = ins.length ? Math.min(...ins) : null;
+    const lastIn = ins.length ? Math.max(...ins) : null;
+    const lastRecIn = withRec.length ? Math.max(...withRec.map(r=>inT(r)||0)) : null;
+    const noEnd = !withRec.length || lastIn==null || lastIn > lastRecIn;      // the last patient has no recovery time
+    const end = noEnd ? null : Math.max(...withRec.map(recT));
+    const last = rows.slice().sort((a,b)=>(inT(b)||0)-(inT(a)||0))[0];
+    const t = tmlTermsOf(company, last.surgeon);
+    let hours = 0, amount = 0, note = 'No finish time';
+    if(!noEnd && shared){
+      const c = tmlCharge(end-start, t.sharedHours*60, t);
+      hours = c.hours; amount = c.amount;
+      note = 'Shared theatre, own time '+tmlDur(end-start)+(c.hours ? ' (allowance '+t.sharedHours+'h)' : '');
+    } else if(!noEnd){
+      const fin = tmlHHMM(t.finish), c = tmlCharge(end, fin, t);
+      hours = c.hours; amount = c.amount;
+      note = c.hours ? tmlDur(end-fin)+' past '+t.finish : 'Finished on time';
+    }
+    out.push({date, room, surgeons:[...new Set(rows.map(r=>r.surgeon))].join(' / '), start, end, shared, noEnd, hours, amount, note});
+  });
+  return out.sort((a,b)=>a.date.localeCompare(b.date) || a.room.localeCompare(b.room));
+}
+function tmlListPrice(entry, date){
+  const p = ((entry && entry.prices)||[]).filter(x=>String(x.from).slice(0,10) <= date)
+    .sort((a,b)=>String(b.from).localeCompare(String(a.from)))[0];
+  return p ? Number(p.price) : null;
+}
+function tmlServiceTwin(item, items){
+  if(!item || item.tracker==='services') return null;
+  const c = tmlKey(item.code), n = tmlKey(item.name);
+  return items.find(x=>x.tracker==='services' && !x.obsolete && x.billPrice!=null && ((c && tmlKey(x.code)===c) || tmlKey(x.name)===n)) || null;
+}
+function tmlLinePrice(entry, item, line, date, twin){
+  const own = tmlListPrice(entry, date);
+  if(own!=null) return {price:own, source:'list'};
+  if(twin) return {price:Number(twin.billPrice), source:'services'};
+  const source = item && item.tracker==='services' ? 'services' : 'tracker';
+  // A case keeps the price it had on the day. A line from before the item had a bill price is not
+  // charged at today's price: only a price on this list can bring it in.
+  if(line) return line.billPrice!=null ? {price:Number(line.billPrice), source} : null;
+  if(item && item.billPrice!=null) return {price:Number(item.billPrice), source};
+  return null;
+}
+function tmlBuild(o){
+  const {rows, lines, company, list, surgeons, exclusions, from, to, aliases, items, companies} = o;
+  const today = o.today || todayISO();
+  const keys = new Set(surgeons.map(tmlKey));
+  const ex = (exclusions||[]).filter(x=>x.companyId===company.id);
+  const inRange = d => d>=from && d<=to;
+  const periodRows = rows.filter(r=>inRange(r.date));
+  const theatre = [], removedRows = [];
+  periodRows.forEach(r=>{
+    if(!keys.has(tmlKey(r.surgeon))) return;
+    const x = tmlExcluded(ex, r.date, r.pid, r.surgeon);
+    if(x) removedRows.push({row:r, ex:x}); else theatre.push(r);
+  });
+  theatre.sort((a,b)=>a.date.localeCompare(b.date) || a.room.localeCompare(b.room) || (tmlT(a,TW_COL.intoTheatre)||0)-(tmlT(b,TW_COL.intoTheatre)||0));
+  const daily = tmlDaily(theatre, periodRows, company);
+
+  const byId = new Map(items.map(i=>[i._row, i]));
+  const twins = new Map();
+  const twinOf = it => { if(!it) return null; if(!twins.has(it._row)) twins.set(it._row, tmlServiceTwin(it, items)); return twins.get(it._row); };
+  const selected = ((list && list.items)||[]).filter(x=>x.selected);
+  const selById = new Map(selected.map(x=>[x.itemId, x])), byCode = new Map(), byName = new Map();
+  selected.forEach(x=>{ const it = byId.get(x.itemId); if(!it) return; if(it.code) byCode.set(tmlKey(it.code), x.itemId); byName.set(tmlKey(it.name), x.itemId); });
+  const who = new Map();
+  rows.forEach(r=>who.set(r.date+'|'+tmlKey(r.pid), r.initials));
+
+  const itemRows = [], missing = new Map(), noRecord = [], before = new Map();
+  (lines||[]).forEach(l=>{
+    const date = String(l.date).slice(0,10);
+    if(!inRange(date)) return;
+    const surgeon = tmlCanon(l.surgeon, aliases);
+    if(!keys.has(tmlKey(surgeon)) || tmlExcluded(ex, date, l.pat, surgeon)) return;
+    const itemId = l.itemId || byCode.get(tmlKey(l.code)) || byName.get(tmlKey(l.name));
+    const entry = selById.get(itemId);
+    if(!entry) return;
+    const item = byId.get(itemId), qty = Number(l.qty)||0;
+    const p = tmlLinePrice(entry, item, l, date, twinOf(item));
+    if(!p && item && item.billPrice!=null){      // used before it had a price: flagged, not charged
+      const b = before.get(itemId) || {itemId, name:item.name, qty:0, value:0, first:date, last:date};
+      b.qty += qty; b.value = tmlRound(b.value + qty*item.billPrice);
+      if(date < b.first) b.first = date;
+      if(date > b.last) b.last = date;
+      before.set(itemId, b);
+      return;
+    }
+    const type = (item ? item.tracker : l.tracker)==='services' ? 'Service' : 'Item';
+    const initials = who.get(date+'|'+tmlKey(l.pat));
+    if(initials===undefined) noRecord.push({date, pat:String(l.pat||''), surgeon, item:item?item.name:l.name});
+    if(!p){
+      const m = missing.get(itemId) || {itemId, name:item?item.name:l.name, tracker:item?item.tracker:l.tracker, cost:item?item.cost:null, qty:0};
+      m.qty += qty; missing.set(itemId, m);
+    }
+    itemRows.push({surgeon, date, procedure:String(l.procedure||''), pat:String(l.pat||''), initials:initials||'',
+      item:item?item.name:String(l.name||''), type, qty, unit:p?p.price:null, amount:p?tmlRound(p.price*qty):0, itemId});
+  });
+  itemRows.sort((a,b)=>a.date.localeCompare(b.date) || a.surgeon.localeCompare(b.surgeon) || a.item.localeCompare(b.item));
+
+  const belowCost = [], noCost = [];
+  selected.forEach(x=>{
+    const it = byId.get(x.itemId);
+    if(!it) return;
+    const p = tmlLinePrice(x, it, null, today, twinOf(it));
+    if(it.cost>0){ if(p && p.price < it.cost) belowCost.push({itemId:x.itemId, name:it.name, price:p.price, cost:it.cost}); }
+    else if(it.tracker!=='services' && p) noCost.push({itemId:x.itemId, name:it.name, price:p.price});
+  });
+
+  const issues = [];
+  theatre.forEach(r=>{
+    const miss = TML_TIMES.filter(([k])=>tmlT(r, TW_COL[k])==null).map(([k,label])=>({col:TW_COL[k], label}));
+    const bad = twTimeProblem(r.cells, 'theatre');
+    if(miss.length || bad || !r.room) issues.push({row:r, miss, bad, noRoom:!r.room});
+  });
+  const blankSurgeon = periodRows.filter(r=>!r.surgeonRaw);
+  const present = new Set(theatre.map(r=>tmlKey(r.surgeon)));
+  itemRows.forEach(r=>present.add(tmlKey(r.surgeon)));
+  const twoLists = [];
+  surgeons.forEach(n=>{
+    if(!present.has(tmlKey(n))) return;
+    const also = (companies||[]).filter(c=>c.id!==company.id && c.active!==false && (c.surgeons||[]).some(s=>tmlKey(s.name)===tmlKey(n))).map(c=>c.name);
+    if(also.length) twoLists.push({surgeon:n, companies:also});
+  });
+  const listed = new Set(); (companies||[]).forEach(c=>(c.surgeons||[]).forEach(s=>listed.add(tmlKey(s.name))));
+  keys.forEach(k=>listed.add(k));
+  const unlisted = [...new Set(periodRows.filter(r=>r.surgeon && !listed.has(tmlKey(r.surgeon))).map(r=>r.surgeon))].sort();
+
+  const dayMap = new Map();
+  const day = d => { if(!dayMap.has(d)) dayMap.set(d, {date:d, items:0, services:0, overruns:0, total:0}); return dayMap.get(d); };
+  theatre.forEach(r=>day(r.date));
+  itemRows.forEach(r=>{ const x = day(r.date); if(r.type==='Service') x.services += r.amount; else x.items += r.amount; });
+  daily.forEach(r=>{ day(r.date).overruns += r.amount; });
+  const summary = [...dayMap.values()].sort((a,b)=>a.date.localeCompare(b.date));
+  summary.forEach(x=>{ x.items = tmlRound(x.items); x.services = tmlRound(x.services); x.overruns = tmlRound(x.overruns); x.total = tmlRound(x.items+x.services+x.overruns); });
+  const totals = summary.reduce((t,x)=>({items:tmlRound(t.items+x.items), services:tmlRound(t.services+x.services), overruns:tmlRound(t.overruns+x.overruns), total:tmlRound(t.total+x.total)}), {items:0, services:0, overruns:0, total:0});
+  return {from, to, company:company.name, listName:list?list.name:'', theatre, removedRows, daily, itemRows, summary, totals,
+    missing:[...missing.values()], beforePrice:[...before.values()].sort((a,b)=>a.name.localeCompare(b.name)), belowCost, noCost, issues, blankSurgeon, twoLists, unlisted, noRecord,
+    noEnd:daily.filter(d=>d.noEnd)};
+}
+function tmlTables(rep){
+  const t = (r, col) => { const m = tmlT(r, col); return m==null ? '' : twClock(m); };
+  const clock = m => m==null ? '' : twClock(m);
+  return {
+    theatre:{title:'Theatre Data', head:['Date','Theatre','PAT','Initials','Procedure','Surgeon','Time sent','Into theatre','Anaesthetic started','Anaesthetic ready','Knife to skin','Finished suturing','Into recovery'], money:[],
+      body:rep.theatre.map(r=>[twDateText(r.date), r.room, r.pid, r.initials, r.procedure, r.surgeon].concat(TML_TIMES.map(([k])=>t(r, TW_COL[k]))))},
+    daily:{title:'Daily Finish', head:['Date','Theatre','Surgeon','Start','End','Over run','Hours charged','Charge'], money:[7],
+      body:rep.daily.map(d=>[twDateText(d.date), d.room||'No theatre', d.surgeons, clock(d.start), clock(d.end), d.note, d.hours, d.amount])},
+    items:{title:'Items Services', head:['Surgeon','Date','Procedure','PAT','Initials','Item / Service','Type','Qty','Unit price','Price'], money:[8,9],
+      body:rep.itemRows.map(r=>[r.surgeon, twDateText(r.date), r.procedure, r.pat, r.initials, r.item, r.type, r.qty, r.unit==null?'':r.unit, r.amount])},
+    summary:{title:'Summary', head:['Date','Items','Services','Over-runs','Daily total'], money:[1,2,3,4], totalRow:true,
+      body:rep.summary.map(x=>[twDateText(x.date), x.items, x.services, x.overruns, x.total]).concat([['GRAND TOTAL', rep.totals.items, rep.totals.services, rep.totals.overruns, rep.totals.total]])}
+  };
+}
+
+/* ---- surgeon names ---- */
+function tmlSimilar(a, b){
+  if(a===b) return 1;
+  if(!a.length || !b.length) return 0;
+  let p = Array.from({length:b.length+1}, (_,i)=>i);
+  for(let i=1; i<=a.length; i++){
+    const q = [i];
+    for(let j=1; j<=b.length; j++) q[j] = Math.min(p[j]+1, q[j-1]+1, p[j-1]+(a[i-1]===b[j-1]?0:1));
+    p = q;
+  }
+  return 1 - p[b.length]/Math.max(a.length, b.length);
+}
+function tmlLookAlike(a, b){
+  if(tmlKey(a)===tmlKey(b)) return false;
+  const x = tmlBare(a), y = tmlBare(b);
+  if(!x || !y) return false;
+  const lx = x.split(' ').pop(), ly = y.split(' ').pop();
+  return lx===ly || tmlSimilar(lx, ly)>=0.8 || tmlSimilar(x, y)>=0.8;
+}
+function tmlDecision(a, b){
+  const [x, y] = [tmlKey(a), tmlKey(b)].sort();
+  return ((tml.cfg && tml.cfg.names)||[]).find(d=>d.a===x && d.b===y) || null;
+}
+function tmlKnownNames(){
+  const m = new Map(), put = n => { const k = tmlKey(n); if(k && !m.has(k)) m.set(k, String(n).trim()); };
+  (state.surgeons||[]).forEach(s=>put(s.name));
+  tmlCos().forEach(c=>(c.surgeons||[]).forEach(s=>put(s.name)));
+  (tml.sheet||[]).forEach(r=>{ put(r.cells[TW_COL.surgeonName]); put(r.cells[TW_COL.surgeon2]); });
+  return [...m.values()].sort((a,b)=>a.localeCompare(b));
+}
+function tmlNameRows(key){
+  const out = [];
+  (tml.sheet||[]).forEach(r=>[TW_COL.surgeonName, TW_COL.surgeon2].forEach(col=>{ if(tmlKey(r.cells[col])===key) out.push({row:r, col}); }));
+  return out;
+}
+function tmlFindPairs(){
+  const p = tml.period || {from:'', to:''}, inPeriod = new Set();
+  (tml.sheet||[]).forEach(r=>{ if(r.date>=p.from && r.date<=p.to){ inPeriod.add(tmlKey(r.cells[TW_COL.surgeonName])); inPeriod.add(tmlKey(r.cells[TW_COL.surgeon2])); } });
+  (tml.lines||[]).forEach(l=>inPeriod.add(tmlKey(l.surgeon)));
+  inPeriod.delete('');
+  const names = tmlKnownNames(), pairs = [], either = [], shortDone = new Set();
+  names.forEach(n=>{
+    const bare = tmlBare(n);
+    if(bare.includes(' ') || !inPeriod.has(tmlKey(n)) || !tmlNameRows(tmlKey(n)).length) return;
+    const opts = names.filter(x=>tmlBare(x).includes(' ') && tmlBare(x).split(' ').pop()===bare && (tmlDecision(n, x)||{}).decision!=='different');
+    if(opts.length>=2 && !opts.some(x=>(tmlDecision(n, x)||{}).decision==='same')){ either.push({name:n, options:opts, rows:tmlNameRows(tmlKey(n))}); shortDone.add(tmlKey(n)); }
+  });
+  for(let i=0; i<names.length; i++) for(let j=i+1; j<names.length; j++){
+    const a = names[i], b = names[j], ka = tmlKey(a), kb = tmlKey(b);
+    if(!tmlLookAlike(a, b) || shortDone.has(ka) || shortDone.has(kb)) continue;
+    if(!inPeriod.has(ka) && !inPeriod.has(kb)) continue;
+    const d = tmlDecision(a, b);
+    if(d && d.decision==='different') continue;
+    const na = tmlNameRows(ka).length, nb = tmlNameRows(kb).length;
+    if(d && d.decision==='same'){
+      const wrong = tmlKey(d.canonical)===ka ? b : a;
+      const n = tmlNameRows(tmlKey(wrong)).length;
+      if(n) pairs.push({a, b, known:true, canonical:d.canonical, wrong, rows:n});
+      continue;
+    }
+    pairs.push({a, b, known:false, rowsA:na, rowsB:nb, suggested:(tmlBare(a).length>=tmlBare(b).length ? a : b)});
+  }
+  tml.pairs = pairs; tml.either = either;
+}
+
+/* ---- loading and running ---- */
+async function tmlLoad(force){
+  if(!LIVE || tml.loading || (tml.cfg && !force)) return;
+  tml.loading = true; tml.error = '';
+  if(currentView==='tml' && !tml.cfg) render();
+  try{
+    tml.cfg = await tmlRpc('tml_get_config');
+    tmlDefaults();
+  }catch(e){ tml.error = e.message; }
+  tml.loading = false;
+  if(tml.report) tmlRecalc();
+  if(currentView==='tml') render();
+}
+function tmlBestList(c){
+  if(!c) return '';
+  if(c.defaultListId && tmlList(c.defaultListId)) return c.defaultListId;
+  const own = tmlLists().find(l=>l.companyId===c.id);
+  return own ? own.id : ((tmlLists()[0]||{}).id || '');
+}
+function tmlDefaults(){
+  const f = tml.form;
+  if(!f.month) f.month = todayISO().slice(0,7);
+  if(!tmlCo(f.companyId)) f.companyId = (tmlCos().find(c=>c.active)||{}).id || '';
+  if(!tmlList(f.listId)) f.listId = tmlBestList(tmlCo(f.companyId));
+}
+function tmlTab(t){ tml.tab = t; if(t==='companies' && !tml.co) tmlCoOpen(tml.form.companyId); if(t==='lists' && !tml.li) tmlListOpen(tml.form.listId); render(); }
+function tmlBackToSetup(){ tml.step = 'setup'; tml.report = null; tml.rm = null; render(); }
+function tmlForm(k, v){
+  tml.form[k] = v;
+  if(k==='companyId'){ tml.add = []; tml.off = []; tml.form.listId = tmlBestList(tmlCo(v)); }
+  if(k==='companyId' || k==='mode' || k==='listId'){ tml.step = 'setup'; tml.report = null; render(); }
+}
+function tmlSurgeonChoices(){
+  const c = tmlCo(tml.form.companyId), off = new Set(tml.off.map(tmlKey));
+  const out = (c ? c.surgeons : []).map(s=>({name:s.name, on:!off.has(tmlKey(s.name)), saved:true}));
+  tml.add.forEach(n=>{ if(!out.some(x=>tmlKey(x.name)===tmlKey(n))) out.push({name:n, on:true, saved:false}); });
+  return out;
+}
+function tmlSurgeonToggle(i){
+  const x = tmlSurgeonChoices()[i];
+  if(!x) return;
+  const k = tmlKey(x.name);
+  if(!x.saved) tml.add = tml.add.filter(n=>tmlKey(n)!==k);
+  else if(x.on) tml.off.push(x.name);
+  else tml.off = tml.off.filter(n=>tmlKey(n)!==k);
+  if(tml.report) tmlRecalc();
+  render();
+}
+function tmlSurgeonAdd(name){
+  const el = document.getElementById('tmlAddSurgeon');
+  const n = String(name!=null ? name : (el ? el.value : '')).trim();
+  if(!n){ toast('Type or choose a surgeon'); return; }
+  tml.off = tml.off.filter(x=>tmlKey(x)!==tmlKey(n));
+  if(!tmlSurgeonChoices().some(x=>tmlKey(x.name)===tmlKey(n))) tml.add.push(n);
+  if(tml.report) tmlRecalc();
+  render();
+}
+async function tmlSurgeonsSave(){
+  const c = tmlCo(tml.form.companyId);
+  if(!c) return;
+  const keep = tmlSurgeonChoices().filter(x=>x.on);
+  const surgeons = keep.map(x=>({name:x.name, terms:((c.surgeons.find(s=>tmlKey(s.name)===tmlKey(x.name))||{}).terms)||null}));
+  try{
+    await tmlRpc('tml_company_save', {p:Object.assign({}, c, {surgeons})});
+    tml.add = []; tml.off = [];
+    tml.co = null;
+    await tmlLoad(true);
+    toast('Surgeon list saved to '+c.name);
+  }catch(e){ toast('Could not save: '+e.message); }
+}
+function tmlRunSurgeons(){ return tmlSurgeonChoices().filter(x=>x.on).map(x=>x.name); }
+async function tmlGenerate(){
+  const c = tmlCo(tml.form.companyId), l = tmlList(tml.form.listId), period = tmlPeriod(tml.form);
+  if(!c){ toast('Choose a company'); return; }
+  if(!l){ toast('Choose an item list'); return; }
+  if(!period){ toast('Choose the dates for this report'); return; }
+  if(!tmlRunSurgeons().length){ toast('Choose at least one surgeon'); return; }
+  tml.busy = 'Reading the theatre sheet and costing records…'; render();
+  try{
+    await tmlLoad(true);
+    tml.busy = 'Reading the theatre sheet and costing records…'; render();
+    await tmlReadData(period);
+    tml.period = period; tml.step = 'review'; tml.rm = null;
+    tmlRecalc();
+  }catch(e){ toast('Could not build the report: '+e.message); }
+  tml.busy = ''; render();
+}
+async function tmlReadData(period){
+  const l = tmlList(tml.form.listId);
+  const raw = await twGetRows();
+  tml.sheet = tmlNormRows(raw, tmlAliases(tml.cfg.names));
+  const byId = new Map((state.items||[]).map(i=>[i._row, i]));
+  const sel = l.items.filter(x=>x.selected).map(x=>byId.get(x.itemId)).filter(Boolean);
+  tml.lines = await tmlRpc('tml_report_lines', {p_from:period.from, p_to:period.to, p_item_ids:sel.map(i=>i._row),
+    p_codes:sel.map(i=>tmlKey(i.code)).filter(Boolean), p_names:sel.map(i=>tmlKey(i.name))}) || [];
+}
+function tmlRecalc(){
+  const company = tmlCo(tml.form.companyId), list = tmlList(tml.form.listId);
+  if(!company || !list || !tml.sheet || !tml.period){ tml.report = null; return; }
+  const aliases = tmlAliases(tml.cfg.names);
+  tml.sheet.forEach(r=>{ r.surgeonRaw = String(r.cells[TW_COL.surgeonName]||'').trim(); r.surgeon = tmlCanon(r.surgeonRaw, aliases); r.room = String(r.cells[TW_COL.theatreNumber]||'').trim(); });
+  tml.report = tmlBuild({rows:tml.sheet, lines:tml.lines, company, list, surgeons:tmlRunSurgeons(), exclusions:tml.cfg.exclusions,
+    from:tml.period.from, to:tml.period.to, aliases, items:state.items||[], companies:tmlCos()});
+  tmlFindPairs();
+}
+async function tmlReread(){
+  tml.busy = 'Reading the sheet again…'; render();
+  try{ await tmlLoad(true); await tmlReadData(tml.period); tmlRecalc(); }catch(e){ toast('Could not read the sheet: '+e.message); }
+  tml.busy = ''; render();
+}
+
+/* ---- corrections to the SharePoint sheet ---- */
+async function tmlApply(fixes){
+  let done = 0, changed = 0, failed = 0;
+  const log = [], label = c => c===TW_COL.surgeonName ? 'Surgeon' : c===TW_COL.surgeon2 ? 'Second surgeon' : c===TW_COL.theatreNumber ? 'Theatre' : (TML_TIMES.find(([k])=>TW_COL[k]===c)||[])[1] || String(c);
+  for(let i=0; i<fixes.length; i+=TML_FIX_MAX){
+    const batch = fixes.slice(i, i+TML_FIX_MAX);
+    const resp = await fetch(THEATRE_WORKER_URL, {method:'POST', headers:await twHeaders(true), body:JSON.stringify({action:'fixCells',
+      fixes:batch.map(f=>({index:f.row.index, pid:f.row.cells[TW_COL.pid], date:f.row.cells[TW_COL.date], col:f.col, expect:f.row.cells[f.col], value:f.value}))})});
+    const data = await resp.json();
+    if(!data.ok) throw new Error(data.error || 'SharePoint refused the change');
+    data.results.forEach((res, n)=>{
+      const f = batch[n];
+      if(res.ok){
+        log.push({date:f.row.date, pat:f.row.pid, field:label(f.col), old:String(f.col>=TW_COL.timeSent ? (tmlT(f.row,f.col)==null?'':twClock(tmlT(f.row,f.col))) : (f.row.cells[f.col]||'')), new:f.value});
+        f.row.cells[f.col] = f.value; done++;
+      } else if(res.reason==='changed') changed++;
+      else failed++;
+    });
+  }
+  if(log.length){ try{ await tmlRpc('tml_log_fixes', {p:log}); }catch(e){} }
+  return {done, changed, failed};
+}
+function tmlApplyMessage(r){
+  if(r.changed) toast('⚠ '+r.done+' saved. '+r.changed+' not saved because the sheet changed. Press "Read the sheet again"');
+  else if(r.failed) toast('⚠ '+r.done+' saved, '+r.failed+' failed. Try again');
+  else toast('✓ Saved to SharePoint');
+}
+async function tmlRowSave(index){
+  const r = (tml.sheet||[]).find(x=>x.index===index);
+  if(!r) return;
+  const val = id => { const el = document.getElementById(id); return el ? String(el.value||'').trim() : null; };
+  const fixes = [], after = r.cells.slice();
+  TML_TIMES.forEach(([k])=>{
+    const col = TW_COL[k], v = val('tmlFix_'+index+'_'+col);
+    if(v==null) return;
+    const now = tmlT(r, col)==null ? '' : twClock(tmlT(r, col));
+    if(v && v!==now){ fixes.push({row:r, col, value:v}); after[col] = v; }
+    else if(!v && now) after[col] = now;
+  });
+  const room = val('tmlFix_'+index+'_'+TW_COL.theatreNumber);
+  if(room && room!==r.room) fixes.push({row:r, col:TW_COL.theatreNumber, value:room});
+  const surgeon = val('tmlFix_'+index+'_'+TW_COL.surgeonName);
+  if(surgeon && surgeon!==r.surgeonRaw) fixes.push({row:r, col:TW_COL.surgeonName, value:surgeon});
+  if(!fixes.length){ toast('Nothing has changed on this row'); return; }
+  const bad = twTimeProblem(after, 'theatre');
+  if(bad){ toast('⚠ '+bad.text); return; }
+  tml.busy = 'Saving to SharePoint…'; render();
+  try{ const res = await tmlApply(fixes); tmlRecalc(); tmlApplyMessage(res); }catch(e){ toast('Not saved: '+e.message); }
+  tml.busy = ''; render();
+}
+async function tmlNameSame(i, which){
+  const p = tml.pairs[i];
+  if(!p) return;
+  let canonical = which==='a' ? p.a : which==='b' ? p.b : which==='known' ? p.canonical : '';
+  if(which==='typed'){ const el = document.getElementById('tmlPairName'+i); canonical = el ? el.value.trim().replace(/\s+/g,' ') : ''; }
+  if(canonical.length<2 || /^[=+\-@]/.test(canonical)){ toast('Enter the correct name'); return; }
+  const wrong = new Set([tmlKey(p.a), tmlKey(p.b)]);
+  wrong.delete(tmlKey(canonical));
+  const fixes = [];
+  wrong.forEach(k=>tmlNameRows(k).forEach(x=>fixes.push({row:x.row, col:x.col, value:canonical})));
+  if(!confirm('Use "'+canonical+'"?\n\nThis changes '+fixes.length+' cell(s) in the SharePoint sheet and combines the names in the app.')) return;
+  tml.busy = 'Fixing the name in SharePoint…'; render();
+  try{
+    const res = fixes.length ? await tmlApply(fixes) : {done:0, changed:0, failed:0};
+    await tmlRpc('tml_name_decide', {p_a:p.a, p_b:p.b, p_decision:'same', p_canonical:canonical});
+    if(typeof loadAll==='function') await loadAll();
+    await tmlLoad(true);
+    tmlRecalc();
+    tmlApplyMessage(res);
+  }catch(e){ toast('Not finished: '+e.message); }
+  tml.busy = ''; render();
+}
+async function tmlNameDifferent(i){
+  const p = tml.pairs[i];
+  if(!p) return;
+  try{ await tmlRpc('tml_name_decide', {p_a:p.a, p_b:p.b, p_decision:'different'}); await tmlLoad(true); tmlRecalc(); toast('Remembered as two different surgeons'); }
+  catch(e){ toast('Could not save: '+e.message); }
+  render();
+}
+async function tmlEitherSave(i){
+  const g = tml.either[i];
+  if(!g) return;
+  const fixes = [];
+  g.rows.forEach(x=>{ const el = document.getElementById('tmlEither_'+x.row.index+'_'+x.col); if(el && el.value) fixes.push({row:x.row, col:x.col, value:el.value}); });
+  if(!fixes.length){ toast('Choose a surgeon for at least one row'); return; }
+  tml.busy = 'Saving to SharePoint…'; render();
+  try{ const res = await tmlApply(fixes); tmlRecalc(); tmlApplyMessage(res); }catch(e){ toast('Not saved: '+e.message); }
+  tml.busy = ''; render();
+}
+async function tmlPriceSave(itemId, inputId){
+  const el = document.getElementById(inputId), v = el ? Number(el.value) : NaN;
+  if(!el || el.value==='' || !isFinite(v) || v<0){ toast('Enter a price'); return; }
+  const list = tmlList(tml.form.listId), entry = list && list.items.find(x=>x.itemId===itemId);
+  const hasOwn = entry && entry.prices && entry.prices.length;
+  try{
+    await tmlRpc('tml_prices_set', {p_list:list.id, p_prices:[{itemId, price:tmlRound(v), from:hasOwn ? todayISO() : ''}]});
+    tml.li = null;
+    await tmlLoad(true);
+    tmlRecalc();
+    toast('Price saved on '+list.name);
+  }catch(e){ toast('Could not save: '+e.message); }
+  render();
+}
+function tmlRmOpen(index){ tml.rm = {index}; render(); }
+function tmlRmClose(){ tml.rm = null; render(); }
+async function tmlRmSave(){
+  const r = (tml.sheet||[]).find(x=>x.index===(tml.rm||{}).index);
+  if(!r) return;
+  const kind = document.getElementById('tmlRmKind').value, reason = document.getElementById('tmlRmReason').value.trim();
+  if(!reason){ toast('Give a reason'); return; }
+  try{
+    await tmlRpc('tml_exclusion_add', {p:{companyId:tml.form.companyId, kind, date:r.date, pat:r.pid, surgeon:r.surgeon, reason}});
+    tml.rm = null;
+    await tmlLoad(true);
+    tmlRecalc();
+    toast('Removed from this company\'s reports');
+  }catch(e){ toast('Could not remove: '+e.message); }
+  render();
+}
+async function tmlRmUndo(id){
+  try{ await tmlRpc('tml_exclusion_remove', {p_id:id}); await tmlLoad(true); tmlRecalc(); toast('Put back in the report'); }
+  catch(e){ toast('Could not undo: '+e.message); }
+  render();
+}
+
+/* ---- screens ---- */
+function tmlView(){
+  if(!tml.cfg && !tml.loading && !tml.error && LIVE) setTimeout(()=>tmlLoad(false), 0);
+  const tab = (id, label) => `<button onclick="tmlTab('${id}')" style="padding:10px 16px;border:none;border-bottom:3px solid ${tml.tab===id?'var(--pine)':'transparent'};background:none;font-weight:${tml.tab===id?'700':'600'};font-size:14.5px;cursor:pointer;color:${tml.tab===id?'var(--pine)':'var(--ink-soft)'}">${label}</button>`;
+  let body;
+  if(tml.error) body = `<div class="gaspanel"><strong>Could not load the TML Report.</strong><div class="sub">${twEsc(tml.error)}</div><button class="btn" onclick="tmlLoad(true)">Try again</button></div>`;
+  else if(!tml.cfg) body = `<div class="sub">Loading…</div>`;
+  else body = tml.tab==='companies' ? tmlCoHtml() : tml.tab==='lists' ? tmlListHtml() : tmlRunHtml();
+  return `<h1>TML Report</h1>
+    <div class="sub">Theatre over-runs and billable items and services, per company.</div>
+    <div class="tmltabs">${tab('run','Run a report')}${tab('companies','Companies &amp; surgeons')}${tab('lists','Item lists &amp; prices')}</div>
+    ${tml.busy?`<div class="tmlbusy">${twEsc(tml.busy)}</div>`:''}
+    ${body}`;
+}
+function tmlRunHtml(){
+  if(!tmlCos().length) return `<div class="gaspanel"><h2>No companies yet</h2><div class="sub">Add a company and its surgeons first.</div><button class="btn primary" onclick="tmlCoNew();tmlTab('companies')">＋ Add a company</button></div>`;
+  const steps = [['setup','1. Choose'],['review','2. Review'],['report','3. Report']];
+  const bar = `<div class="tmlsteps">${steps.map(([id,l])=>`<span class="${tml.step===id?'on':''}">${l}</span>`).join('')}</div>`;
+  if(tml.step==='review' && tml.report) return bar + tmlReviewHtml();
+  if(tml.step==='report' && tml.report) return bar + tmlReportHtml();
+  return bar + tmlSetupHtml();
+}
+function tmlSetupHtml(){
+  const f = tml.form, c = tmlCo(f.companyId), period = tmlPeriod(f);
+  const opt = (v, l, sel) => `<option value="${twEsc(v)}"${sel?' selected':''}>${twEsc(l)}</option>`;
+  const choices = tmlSurgeonChoices();
+  const changed = tml.add.length || tml.off.length;
+  const lists = tmlLists().slice().sort((a,b)=>(b.companyId===f.companyId)-(a.companyId===f.companyId) || a.name.localeCompare(b.name));
+  const months = []; { const d = new Date(todayISO()+'T12:00:00Z'); for(let i=0; i<36; i++){ const x = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth()-i, 1)); months.push([x.toISOString().slice(0,7), x.toLocaleDateString('en-GB',{month:'long', year:'numeric', timeZone:'UTC'})]); } }
+  const dateBox = (k, label) => `<div class="fld"><label>${label}</label><input type="date" value="${twEsc(f[k])}" onchange="tml.form['${k}']=this.value;render()"></div>`;
+  return `<div class="gaspanel"><h2>Company and item list</h2><div class="steprow">
+      <div class="fld"><label>Company</label><select id="tmlCompany" onchange="tmlForm('companyId',this.value)">${tmlCos().filter(x=>x.active||x.id===f.companyId).map(x=>opt(x.id, x.name, x.id===f.companyId)).join('')}</select></div>
+      <div class="fld"><label>Item list</label><select id="tmlList" onchange="tmlForm('listId',this.value)"><option value="">Choose…</option>${lists.map(x=>opt(x.id, x.name, x.id===f.listId)).join('')}</select></div>
+    </div></div>
+    <div class="gaspanel"><h2>Surgeons in this report</h2>
+      <div class="sub">Untick someone for this report, or add someone. Save only if the company's list should change for good.</div>
+      <div class="tmlchips">${choices.map((x,i)=>`<label class="tmlchip${x.on?' on':''}"><input type="checkbox" ${x.on?'checked':''} onchange="tmlSurgeonToggle(${i})">${twEsc(x.name)}${x.saved?'':' <em>(this report)</em>'}</label>`).join('') || '<span class="sub">No surgeons saved for this company yet.</span>'}</div>
+      <div class="steprow" style="align-items:end;margin-top:10px">
+        <div class="fld"><label>Add a surgeon</label><input id="tmlAddSurgeon" list="tmlNames" placeholder="Start typing a name" onkeydown="if(event.key==='Enter')tmlSurgeonAdd()"><datalist id="tmlNames">${tmlKnownNames().map(n=>`<option value="${twEsc(n)}">`).join('')}</datalist></div>
+        <button class="btn" onclick="tmlSurgeonAdd()">Add</button>
+        ${changed?`<button class="btn" id="tmlSaveSurgeons" onclick="tmlSurgeonsSave()">Save this list to ${twEsc(c?c.name:'company')}</button>`:''}
+      </div>
+    </div>
+    <div class="gaspanel"><h2>Period</h2>
+      <div class="tmlchips">${TML_PERIODS.map(([id,l])=>`<button class="btn${f.mode===id?' primary':''}" onclick="tmlForm('mode','${id}')">${l}</button>`).join('')}</div>
+      <div class="steprow" style="margin-top:10px">
+        ${f.mode==='date' ? dateBox('day','Date') : ''}
+        ${f.mode==='week' ? dateBox('week','Any day in the week') : ''}
+        ${f.mode==='month' ? `<div class="fld"><label>Month</label><select onchange="tml.form.month=this.value;render()">${months.map(([v,l])=>opt(v, l, v===f.month)).join('')}</select></div>` : ''}
+        ${f.mode==='custom' ? dateBox('from','From')+dateBox('to','To') : ''}
+      </div>
+      <div class="sub" style="margin:8px 0 0">${period ? 'Report covers '+twDateText(period.from)+(period.to!==period.from?' to '+twDateText(period.to):'') : 'Choose the dates'}</div>
+    </div>
+    <button class="btn primary" id="tmlGenerateBtn" onclick="tmlGenerate()"${tml.busy?' disabled':''}>Continue to review</button>`;
+}
+function tmlFlagBox(title, body, tone){ return `<div class="gaspanel tmlflag${tone?' '+tone:''}"><h2>${title}</h2>${body}</div>`; }
+function tmlNamesHtml(){
+  if(!tml.pairs.length && !tml.either.length) return '';
+  const pairs = tml.pairs.map((p,i)=> p.known
+    ? `<div class="tmlline"><span><strong>${twEsc(p.wrong)}</strong> should be <strong>${twEsc(p.canonical)}</strong> (${p.rows} in the sheet)</span><button class="btn primary" onclick="tmlNameSame(${i},'known')">Fix</button></div>`
+    : `<div class="tmlline tmlpair"><span><strong>${twEsc(p.a)}</strong> (${p.rowsA}) and <strong>${twEsc(p.b)}</strong> (${p.rowsB})</span>
+        <span class="tmlbtns"><button class="btn" onclick="tmlNameSame(${i},'a')">Same: ${twEsc(p.a)}</button><button class="btn" onclick="tmlNameSame(${i},'b')">Same: ${twEsc(p.b)}</button><button class="btn" onclick="tmlNameDifferent(${i})">Different surgeons</button>
+        <input id="tmlPairName${i}" placeholder="Or type the correct name" value=""><button class="btn" onclick="tmlNameSame(${i},'typed')">Use this name</button></span></div>`).join('');
+  const either = tml.either.map((g,i)=>`<div class="tmlline" style="display:block"><strong>${twEsc(g.name)}</strong> could be ${g.options.map(twEsc).join(' or ')}. Choose for each row:
+      ${g.rows.map(x=>`<div class="tmlline"><span>${twEsc(twDateText(x.row.date))} · ${twEsc(x.row.room)} · PAT ${twEsc(x.row.pid)} · ${twEsc(x.row.initials)}</span><select id="tmlEither_${x.row.index}_${x.col}"><option value="">Leave</option>${g.options.map(o=>`<option value="${twEsc(o)}">${twEsc(o)}</option>`).join('')}</select></div>`).join('')}
+      <button class="btn primary" onclick="tmlEitherSave(${i})">Save these rows</button></div>`).join('');
+  return tmlFlagBox('Surgeon names to check', `<div class="sub">The number is how many times each name is in the sheet. Choosing a name fixes it in SharePoint and in the app.</div>${pairs}${either}`);
+}
+function tmlFixRowHtml(r, x){
+  const need = new Set((x.miss||[]).map(m=>m.col));
+  const times = TML_TIMES.map(([k,label])=>{
+    const col = TW_COL[k], v = tmlT(r, col);
+    return `<div class="fld"><label>${label}</label><input id="tmlFix_${r.index}_${col}" type="time" value="${v==null?'':twClock(v)}"${need.has(col)?' class="tmlneed"':''}></div>`;
+  }).join('');
+  const room = !r.room ? `<div class="fld"><label>Theatre</label><select id="tmlFix_${r.index}_${TW_COL.theatreNumber}" class="tmlneed"><option value=""></option>${TW_ROOMS.map(n=>`<option>${n}</option>`).join('')}</select></div>` : '';
+  const surgeon = !r.surgeonRaw ? `<div class="fld"><label>Surgeon</label><input id="tmlFix_${r.index}_${TW_COL.surgeonName}" list="tmlNames" class="tmlneed"></div>` : '';
+  const what = [x.noRoom?'no theatre':'', !r.surgeonRaw?'no surgeon':'', (x.miss||[]).length?(x.miss.map(m=>m.label).join(', ')+' missing'):'', x.bad?x.bad.text:''].filter(Boolean).join('. ');
+  return `<div class="tmlfix"><div><strong>${twEsc(twDateText(r.date))}</strong> · ${twEsc(r.room||'No theatre')} · PAT ${twEsc(r.pid)} · ${twEsc(r.initials)} · ${twEsc(r.surgeon||'No surgeon')}<div class="tmlwarn">${twEsc(what)}</div></div>
+    <div class="steprow">${room}${surgeon}${times}</div><button class="btn primary" onclick="tmlRowSave(${r.index})">Save to SharePoint</button></div>`;
+}
+function tmlReviewHtml(){
+  const r = tml.report, blocks = [tmlNamesHtml()];
+  if(r.blankSurgeon.length) blocks.push(tmlFlagBox('Rows with no surgeon', `<datalist id="tmlNames">${tmlKnownNames().map(n=>`<option value="${twEsc(n)}">`).join('')}</datalist>${r.blankSurgeon.map(x=>tmlFixRowHtml(x, {miss:[]})).join('')}`));
+  if(r.issues.length) blocks.push(tmlFlagBox('Times or theatre to fix ('+r.issues.length+')', r.issues.map(x=>tmlFixRowHtml(x.row, x)).join('')));
+  if(r.missing.length) blocks.push(tmlFlagBox('Items with no price ('+r.missing.length+')', `<div class="sub">The price stays on this list until you change it. The tracker is not changed.</div>`+r.missing.map((m,i)=>`<div class="tmlline"><span><strong>${twEsc(m.name)}</strong> · ${twEsc(TML_TRACKERS[m.tracker]||m.tracker)} · used ${m.qty}${m.cost>0?' · purchase price '+tmlMoney(m.cost):''}</span><span class="tmlbtns"><input id="tmlMissing${i}" type="number" min="0" step="0.01" placeholder="£ price"><button class="btn primary" onclick="tmlPriceSave('${m.itemId}','tmlMissing${i}')">Save price</button></span></div>`).join(''), 'red'));
+  if(r.belowCost.length) blocks.push(tmlFlagBox('Priced below purchase price ('+r.belowCost.length+')', r.belowCost.map((m,i)=>`<div class="tmlline"><span><strong>${twEsc(m.name)}</strong> · charged ${tmlMoney(m.price)} · purchase price ${tmlMoney(m.cost)}</span><span class="tmlbtns"><input id="tmlBelow${i}" type="number" min="0" step="0.01" placeholder="New price"><button class="btn" onclick="tmlPriceSave('${m.itemId}','tmlBelow${i}')">Save from today</button></span></div>`).join(''), 'red'));
+  if(r.beforePrice.length){
+    const worth = tmlRound(r.beforePrice.reduce((a,x)=>a+x.value, 0));
+    blocks.push(tmlFlagBox('Used before they had a price: not charged', `<div class="sub">Worth ${tmlMoney(worth)} at today's prices. To charge them, give the item a price on this list with a start date on or before the first use.</div><details><summary>Show them (${r.beforePrice.length})</summary>`+r.beforePrice.map(x=>`<div class="tmlline"><span><strong>${twEsc(x.name)}</strong> · used ${x.qty} · ${twEsc(twDateText(x.first))} to ${twEsc(twDateText(x.last))} · ${tmlMoney(x.value)}</span></div>`).join('')+`</details>`));
+  }
+  if(r.noEnd.length) blocks.push(tmlFlagBox('No finish time ('+r.noEnd.length+')', `<div class="sub">The last patient has no recovery time, so no over-run can be worked out.</div>`+r.noEnd.map(d=>`<div class="tmlline"><span>${twEsc(twDateText(d.date))} · ${twEsc(d.room||'No theatre')} · ${twEsc(d.surgeons)}</span></div>`).join('')));
+  if(r.twoLists.length) blocks.push(tmlFlagBox('Surgeons on two company lists', `<div class="sub">Check that these patients are not invoiced to both companies.</div>`+r.twoLists.map(x=>`<div class="tmlline"><span><strong>${twEsc(x.surgeon)}</strong> is also on ${x.companies.map(twEsc).join(', ')}</span></div>`).join('')));
+  if(r.noRecord.length) blocks.push(tmlFlagBox('Costing with no theatre record ('+r.noRecord.length+')', `<div class="sub">These lines are in the report, but their PAT number and date are not in the theatre sheet.</div><details><summary>Show them</summary>`+r.noRecord.map(x=>`<div class="tmlline"><span>${twEsc(twDateText(x.date))} · PAT ${twEsc(x.pat||'blank')} · ${twEsc(x.surgeon)} · ${twEsc(x.item)}</span></div>`).join('')+`</details>`));
+  if(r.unlisted.length) blocks.push(tmlFlagBox('Surgeons not on any company list', `<div class="sub">Worked in this period. Add one to this report if they belong to it.</div>`+r.unlisted.map(n=>`<div class="tmlline"><span>${twEsc(n)}</span><button class="btn" data-n="${twEsc(n)}" onclick="tmlSurgeonAdd(this.dataset.n)">Add to this report</button></div>`).join('')));
+  if(r.noCost.length) blocks.push(`<div class="gaspanel"><details><summary><strong>No purchase price recorded (${r.noCost.length})</strong>, so these can't be checked</summary>${r.noCost.map(x=>`<div class="tmlline"><span>${twEsc(x.name)} · charged ${tmlMoney(x.price)}</span></div>`).join('')}</details></div>`);
+  const flagged = r.issues.length + r.blankSurgeon.length + r.noEnd.length + tml.pairs.length + tml.either.length + r.noRecord.length;
+  const canGo = !r.missing.length;
+  return `<div class="tmlcards">${tmlCard('Patients', r.theatre.length)}${tmlCard('Items', tmlMoney(r.totals.items))}${tmlCard('Services', tmlMoney(r.totals.services))}${tmlCard('Over-runs', tmlMoney(r.totals.overruns))}${tmlCard('Total', tmlMoney(r.totals.total), true)}</div>
+    ${blocks.filter(Boolean).join('') || '<div class="gaspanel"><strong>✓ Nothing needs fixing.</strong></div>'}
+    ${tmlPatientsHtml()}
+    <div class="tmlbtns" style="margin-top:12px"><button class="btn" onclick="tmlBackToSetup()">‹ Back</button><button class="btn" onclick="tmlReread()">Read the sheet again</button>
+      <button class="btn primary" id="tmlToReport" ${canGo?'':'disabled'} onclick="tml.step='report';tml.show='theatre';render()">${canGo ? (flagged ? 'Continue to report ('+flagged+' still flagged)' : 'Continue to report') : 'Add the missing prices to continue'}</button></div>`;
+}
+function tmlCard(label, value, strong){ return `<div class="tmlcard${strong?' strong':''}"><div>${label}</div><strong>${value}</strong></div>`; }
+function tmlPatientsHtml(){
+  const r = tml.report, rm = tml.rm;
+  const removed = ((tml.cfg.exclusions)||[]).filter(x=>x.companyId===tml.form.companyId && x.date>=r.from && x.date<=r.to);
+  const what = x => x.kind==='day' ? 'Whole day' : x.kind==='surgeon' ? twEsc(x.surgeon)+"'s list" : 'PAT '+twEsc(x.pat);
+  const rows = r.theatre.map(x=>`<tr><td>${twEsc(twDateText(x.date))}</td><td>${twEsc(x.room)}</td><td>${twEsc(x.pid)}</td><td>${twEsc(x.initials)}</td><td>${twEsc(x.surgeon)}</td><td>${twEsc(x.procedure)}</td>
+      <td><button class="btn" style="padding:4px 9px;font-size:12px" onclick="tmlRmOpen(${x.index})">Remove…</button></td></tr>
+      ${rm && rm.index===x.index ? `<tr><td colspan="7"><div class="tmlbtns"><select id="tmlRmKind"><option value="patient">This patient only</option><option value="surgeon">${twEsc(x.surgeon)}'s whole list that day</option><option value="day">Everyone that day</option></select><input id="tmlRmReason" placeholder="Reason, e.g. private list" style="min-width:220px"><button class="btn primary" onclick="tmlRmSave()">Remove from report</button><button class="btn" onclick="tmlRmClose()">Cancel</button></div></td></tr>`:''}`).join('');
+  return `<div class="gaspanel"><details${rm?' open':''}><summary><strong>Patients in this report (${r.theatre.length})</strong>: remove a patient, day or private list</summary>
+      ${removed.length?`<h2 style="margin-top:10px">Removed from this company's reports</h2>${removed.map(x=>`<div class="tmlline"><span>${twEsc(twDateText(x.date))} · ${what(x)} · ${twEsc(x.reason)}</span><button class="btn" onclick="tmlRmUndo('${x.id}')">Undo</button></div>`).join('')}`:''}
+      <div class="tmlwrap"><table><thead><tr><th>Date</th><th>Theatre</th><th>PAT</th><th>Initials</th><th>Surgeon</th><th>Procedure</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
+    </details></div>`;
+}
+function tmlCellText(t, i, v){ return t.money.includes(i) && v!=='' ? tmlMoney(v) : String(v==null?'':v); }
+function tmlReportHtml(){
+  const r = tml.report, T = tmlTables(r), t = T[tml.show] || T.theatre;
+  const left = r.issues.length + r.blankSurgeon.length + r.noEnd.length + r.noRecord.length + tml.pairs.length + tml.either.length;
+  const tab = k => `<button class="btn${tml.show===k?' primary':''}" onclick="tml.show='${k}';render()">${T[k].title}</button>`;
+  const dl = k => `<button class="btn" onclick="tmlPdf('${k}')">${T[k].title}</button>`;
+  const csv = k => `<button class="btn" onclick="tmlCsv('${k}')">${T[k].title}</button>`;
+  return `<div class="gaspanel"><h2>${twEsc(r.company)}: ${twEsc(twDateText(r.from))}${r.to!==r.from?' to '+twEsc(twDateText(r.to)):''}</h2><div class="sub" style="margin:0">Item list: ${twEsc(r.listName)}</div></div>
+    ${left?`<div class="gaspanel tmlflag"><strong>⚠ ${left} thing${left===1?'':'s'} still flagged.</strong> <button class="btn" onclick="tml.step='review';render()">Back to review</button></div>`:''}
+    ${r.belowCost.length?`<div class="gaspanel tmlflag red"><strong>⚠ ${r.belowCost.length} item${r.belowCost.length===1?' is':'s are'} priced below purchase price:</strong> ${r.belowCost.map(x=>twEsc(x.name)).join(', ')}</div>`:''}
+    <div class="tmlcards">${tmlCard('Items', tmlMoney(r.totals.items))}${tmlCard('Services', tmlMoney(r.totals.services))}${tmlCard('Over-runs', tmlMoney(r.totals.overruns))}${tmlCard('Total', tmlMoney(r.totals.total), true)}</div>
+    <div class="gaspanel"><h2>Download</h2>
+      <div class="tmlbtns"><strong>PDF:</strong><button class="btn primary" onclick="tmlPdf('all')">Whole report</button>${['theatre','daily','items','summary'].map(dl).join('')}</div>
+      <div class="tmlbtns" style="margin-top:8px"><strong>Excel:</strong><button class="btn primary" onclick="tmlExcel()">One file, 4 tabs</button></div>
+      <div class="tmlbtns" style="margin-top:8px"><strong>CSV:</strong>${['theatre','daily','items','summary'].map(csv).join('')}</div>
+    </div>
+    <div class="tmlbtns" style="margin-bottom:10px">${['theatre','daily','items','summary'].map(tab).join('')}</div>
+    <div class="tmlwrap"><table class="tmltable"><thead><tr>${t.head.map(h=>`<th>${twEsc(h)}</th>`).join('')}</tr></thead>
+      <tbody>${t.body.map(row=>`<tr${row[0]==='GRAND TOTAL'?' class="tmltotal"':''}>${row.map((v,i)=>`<td>${twEsc(tmlCellText(t, i, v))}</td>`).join('')}</tr>`).join('') || `<tr><td colspan="${t.head.length}">Nothing in this period.</td></tr>`}</tbody></table></div>
+    <div class="tmlbtns" style="margin-top:12px"><button class="btn" onclick="tml.step='review';render()">‹ Back to review</button><button class="btn" onclick="tmlBackToSetup()">Start another report</button></div>`;
+}
+
+/* ---- downloads ---- */
+function tmlFileName(suffix, ext){
+  const r = tml.report, safe = s => String(s).replace(/[^A-Za-z0-9]+/g,'_').replace(/^_|_$/g,'');
+  return 'TML_'+safe(r.company)+'_'+r.from+'_to_'+r.to+(suffix?'_'+safe(suffix):'')+'.'+ext;
+}
+async function tmlPdf(which){
+  const r = tml.report;
+  if(!r) return;
+  const { jsPDF } = window.jspdf, T = tmlTables(r), keys = which==='all' ? ['theatre','daily','items','summary'] : [which];
+  const doc = new jsPDF({orientation:'landscape', unit:'mm', format:'a4'});
+  const W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight();
+  let logo = null;
+  try{
+    const blob = await fetch('logo.png').then(x=>x.blob());
+    const url = await new Promise(res=>{ const fr = new FileReader(); fr.onload = ()=>res(fr.result); fr.readAsDataURL(blob); });
+    const img = await new Promise(res=>{ const i = new Image(); i.onload = ()=>res(i); i.onerror = ()=>res(null); setTimeout(()=>res(null), 1500); i.src = url; });
+    if(img) logo = {url, w:14*(img.width/img.height)};
+  }catch(e){}
+  const period = twDateText(r.from)+(r.to!==r.from?' to '+twDateText(r.to):'');
+  const header = title => {
+    if(logo) doc.addImage(logo.url, 'PNG', 10, 8, logo.w, 14);
+    doc.setFont('helvetica','bold'); doc.setFontSize(15); doc.setTextColor(43,97,104);
+    doc.text('TML Report: '+r.company+' - '+title, W-10, 13, {align:'right'});
+    doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(90,90,90);
+    doc.text(period+' · Total '+tmlMoney(r.totals.total)+' · Printed '+new Date().toLocaleString('en-GB')+(myName?' by '+myName:''), W-10, 18.5, {align:'right'});
+    doc.setDrawColor(176,138,62); doc.setLineWidth(0.8); doc.line(10, 22, W-10, 22);
+  };
+  keys.forEach((k, n)=>{
+    const t = T[k];
+    if(n) doc.addPage();
+    doc.autoTable({
+      startY:25, margin:{left:10, right:10, top:25, bottom:12},
+      head:[t.head], body:t.body.length ? t.body.map(row=>row.map((v,i)=>tmlCellText(t, i, v))) : [t.head.map((_,i)=>i?'':'Nothing in this period')],
+      theme:'grid',
+      styles:{font:'helvetica', fontSize:k==='theatre'?7:8, cellPadding:1.6, lineColor:[185,201,197], lineWidth:0.15, textColor:[23,37,31], overflow:'linebreak', valign:'middle'},
+      headStyles:{fillColor:[43,97,104], textColor:255, fontStyle:'bold'},
+      alternateRowStyles:{fillColor:[242,247,246]},
+      didParseCell:d=>{ if(d.section==='body' && d.row.raw && d.row.raw[0]==='GRAND TOTAL') d.cell.styles.fontStyle = 'bold'; },
+      didDrawPage:()=>{
+        header(t.title);
+        doc.setFont('helvetica','normal'); doc.setFontSize(7.5); doc.setTextColor(140,140,140);
+        doc.text('Bollin Clinic: confidential', 10, H-6);
+        doc.text('Page '+doc.internal.getCurrentPageInfo().pageNumber, W-10, H-6, {align:'right'});
+      }
+    });
+  });
+  doc.save(tmlFileName(which==='all' ? '' : T[which].title, 'pdf'));
+  toast('PDF downloaded');
+}
+function tmlCsvSafe(v){ if(typeof v==='number') return v; const s = String(v==null?'':v); return /^[=+\-@\t\r]/.test(s) ? "'"+s : s; }
+function tmlCsv(k){
+  const t = tmlTables(tml.report)[k];
+  const rows = t.body.map(row=>row.map((v,i)=>t.money.includes(i) && v!=='' ? Number(v).toFixed(2) : tmlCsvSafe(v)));
+  downloadCSV(tmlFileName(t.title, 'csv'), t.head, rows);
+}
+const TML_CRC = (()=>{ const t = []; for(let n=0; n<256; n++){ let c = n; for(let k=0; k<8; k++) c = c&1 ? 0xEDB88320^(c>>>1) : c>>>1; t[n] = c>>>0; } return t; })();
+function tmlCrc(b){ let c = 0xFFFFFFFF; for(let i=0; i<b.length; i++) c = TML_CRC[(c^b[i])&255]^(c>>>8); return (c^0xFFFFFFFF)>>>0; }
+// a plain ZIP (no compression), which is all an .xlsx file needs: no outside library sees the data
+function tmlZip(files){
+  const enc = new TextEncoder(), parts = [], central = [];
+  const u16 = n => [n&255, (n>>>8)&255], u32 = n => [n&255, (n>>>8)&255, (n>>>16)&255, (n>>>24)&255];
+  let offset = 0;
+  files.forEach(f=>{
+    const name = enc.encode(f.name), data = enc.encode(f.text), crc = tmlCrc(data);
+    const common = [...u16(20), ...u16(0x0800), ...u16(0), ...u16(0), ...u16(0x21), ...u32(crc), ...u32(data.length), ...u32(data.length), ...u16(name.length), ...u16(0)];
+    const local = new Uint8Array([0x50,0x4B,3,4, ...common]);
+    parts.push(local, name, data);
+    central.push({name, common, offset});
+    offset += local.length + name.length + data.length;
+  });
+  const start = offset;
+  let size = 0;
+  central.forEach(c=>{
+    const h = new Uint8Array([0x50,0x4B,1,2, ...u16(20), ...c.common, ...u16(0), ...u16(0), ...u16(0), ...u32(0), ...u32(c.offset)]);
+    parts.push(h, c.name);
+    size += h.length + c.name.length;
+  });
+  parts.push(new Uint8Array([0x50,0x4B,5,6, 0,0,0,0, ...u16(files.length), ...u16(files.length), ...u32(size), ...u32(start), 0,0]));
+  return parts;
+}
+function tmlXlsxFiles(tables){
+  const esc = s => String(s).replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g,'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  const colName = n => { let s = ''; for(n=n+1; n>0; n=Math.floor((n-1)/26)) s = String.fromCharCode(65+(n-1)%26)+s; return s; };
+  const NS = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main', RN = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+  const XML = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n';
+  const cell = (r, c, v, style) => {
+    const ref = colName(c)+r, s = style ? ` s="${style}"` : '';
+    if(typeof v==='number' && isFinite(v)) return `<c r="${ref}"${s}><v>${v}</v></c>`;
+    if(v==='' || v==null) return `<c r="${ref}"${s}/>`;
+    return `<c r="${ref}"${s} t="inlineStr"><is><t xml:space="preserve">${esc(v)}</t></is></c>`;
+  };
+  const sheet = t => {
+    const widths = t.head.map((h,i)=>Math.min(38, Math.max(String(h).length, ...t.body.slice(0,400).map(r=>String(tmlCellText(t, i, r[i])).length))+2));
+    const head = `<row r="1">${t.head.map((h,c)=>cell(1, c, h, 1)).join('')}</row>`;
+    const body = t.body.map((row, n)=>{
+      const total = row[0]==='GRAND TOTAL';
+      return `<row r="${n+2}">${row.map((v,c)=>cell(n+2, c, v, t.money.includes(c) ? (total?4:2) : (total?3:0))).join('')}</row>`;
+    }).join('');
+    return XML+`<worksheet xmlns="${NS}"><sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews><cols>${widths.map((w,i)=>`<col min="${i+1}" max="${i+1}" width="${w}" customWidth="1"/>`).join('')}</cols><sheetData>${head}${body}</sheetData></worksheet>`;
+  };
+  const files = [
+    {name:'[Content_Types].xml', text:XML+`<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>${tables.map((_,i)=>`<Override PartName="/xl/worksheets/sheet${i+1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join('')}</Types>`},
+    {name:'_rels/.rels', text:XML+`<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="${RN}/officeDocument" Target="xl/workbook.xml"/></Relationships>`},
+    {name:'xl/workbook.xml', text:XML+`<workbook xmlns="${NS}" xmlns:r="${RN}"><sheets>${tables.map((t,i)=>`<sheet name="${esc(t.title)}" sheetId="${i+1}" r:id="rId${i+1}"/>`).join('')}</sheets></workbook>`},
+    {name:'xl/_rels/workbook.xml.rels', text:XML+`<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${tables.map((_,i)=>`<Relationship Id="rId${i+1}" Type="${RN}/worksheet" Target="worksheets/sheet${i+1}.xml"/>`).join('')}<Relationship Id="rId${tables.length+1}" Type="${RN}/styles" Target="styles.xml"/></Relationships>`},
+    {name:'xl/styles.xml', text:XML+`<styleSheet xmlns="${NS}"><numFmts count="1"><numFmt numFmtId="164" formatCode="&quot;£&quot;#,##0.00"/></numFmts><fonts count="3"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><color rgb="FFFFFFFF"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font></fonts><fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FF2B6168"/><bgColor indexed="64"/></patternFill></fill></fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="5"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1"/><xf numFmtId="164" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/><xf numFmtId="0" fontId="2" fillId="0" borderId="0" xfId="0" applyFont="1"/><xf numFmtId="164" fontId="2" fillId="0" borderId="0" xfId="0" applyNumberFormat="1" applyFont="1"/></cellXfs></styleSheet>`}
+  ];
+  tables.forEach((t,i)=>files.push({name:`xl/worksheets/sheet${i+1}.xml`, text:sheet(t)}));
+  return files;
+}
+function tmlExcel(){
+  const T = tmlTables(tml.report);
+  const parts = tmlZip(tmlXlsxFiles(['theatre','daily','items','summary'].map(k=>T[k])));
+  const blob = new Blob(parts, {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+  const url = URL.createObjectURL(blob), a = document.createElement('a');
+  a.href = url; a.download = tmlFileName('', 'xlsx');
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(()=>URL.revokeObjectURL(url), 2000);
+  toast('Excel file downloaded');
+}
+
+/* ---- companies and surgeons ---- */
+// a new company starts with the saved default terms (kept in the database: this page is public)
+function tmlBlankCo(){
+  const d = (tml.cfg && tml.cfg.defaults) || {}, v = x => x==null ? '' : x;
+  return {id:'', name:'', active:true, start:d.start||'', finish:d.finish||'', grace:v(d.grace), rate:v(d.rate), maxHours:v(d.maxHours), countFrom:d.countFrom||'finish', sharedHours:v(d.sharedHours), defaultListId:'', surgeons:[]};
+}
+function tmlTermsMissing(c){ return ['finish','grace','rate','maxHours','sharedHours'].some(k=>c[k]==null || c[k]===''); }
+function tmlTermsText(c){
+  if(tmlTermsMissing(c)) return 'Enter the terms for this company.';
+  const fin = tmlHHMM(c.finish), free = twClock(fin + Number(c.grace));
+  return 'Free until '+free+', then each started hour from '+(c.countFrom==='grace' ? free : c.finish)+' at '+tmlMoney(c.rate)+', up to '+c.maxHours+' hours. In a shared theatre, only time over '+c.sharedHours+' hours is charged.';
+}
+function tmlCoOpen(id){ const c = tmlCo(id); tml.co = c ? JSON.parse(JSON.stringify(c)) : tmlBlankCo(); render(); }
+function tmlCoNew(){ tml.co = tmlBlankCo(); render(); }
+function tmlCoSet(k, v){ if(tml.co) tml.co[k] = v; }
+function tmlCoSetTerm(k, v){
+  if(!tml.co) return;
+  tml.co[k] = v;
+  const el = document.getElementById('tmlTermsText');
+  if(el) el.textContent = tmlTermsText(tml.co);
+}
+async function tmlDefaultsSave(){
+  if(tmlTermsMissing(tml.co)){ toast('Enter all the over-run terms first'); return; }
+  const c = tml.co;
+  try{
+    await tmlRpc('tml_default_terms_save', {p:{start:c.start, finish:c.finish, grace:c.grace, rate:c.rate, maxHours:c.maxHours, countFrom:c.countFrom, sharedHours:c.sharedHours}});
+    await tmlLoad(true);
+    toast('New companies will start with these terms');
+  }catch(e){ toast('Could not save: '+e.message); }
+}
+function tmlTermFields(o, prefix, onchange){
+  const num = (k, label, step) => `<div class="fld"><label>${label}</label><input type="number" min="0" step="${step}" value="${twEsc(o[k]==null?'':o[k])}" onchange="${onchange}('${k}',this.value)"></div>`;
+  const time = (k, label) => `<div class="fld"><label>${label}</label><input type="time" value="${twEsc(o[k]||'')}" onchange="${onchange}('${k}',this.value)"></div>`;
+  return `<div class="steprow">${time('start','List start (shown, not charged)')}${time('finish','Finish time')}${num('grace','Grace (minutes)',1)}${num('rate','£ per started hour',0.01)}${num('maxHours','Maximum hours',1)}
+    <div class="fld"><label>Count hours from</label><select onchange="${onchange}('countFrom',this.value)"><option value="finish"${o.countFrom!=='grace'?' selected':''}>The finish time</option><option value="grace"${o.countFrom==='grace'?' selected':''}>The end of the grace</option></select></div>
+    ${num('sharedHours','Shared theatre: hours allowed',0.25)}</div>`;
+}
+function tmlCoHtml(){
+  if(!tml.co) tml.co = tmlCo(tml.form.companyId) ? JSON.parse(JSON.stringify(tmlCo(tml.form.companyId))) : tmlBlankCo();
+  const c = tml.co;
+  const surgeons = c.surgeons.map((s,i)=>`<div class="tmlline" style="display:block"><div class="tmlbtns" style="justify-content:space-between"><strong>${twEsc(s.name)}</strong><span class="tmlbtns"><label class="tmlchip"><input type="checkbox" ${s.terms?'checked':''} onchange="tmlCoOwnTerms(${i},this.checked)">Own terms</label><button class="btn" onclick="tmlCoDropSurgeon(${i})">Remove</button></span></div>${s.terms?tmlTermFields(s.terms,'', 'tmlCoTerm_'+i):''}</div>`).join('');
+  c.surgeons.forEach((s,i)=>{ window['tmlCoTerm_'+i] = (k, v) => { if(tml.co && tml.co.surgeons[i] && tml.co.surgeons[i].terms) tml.co.surgeons[i].terms[k] = v; }; });
+  return `<div class="gaspanel"><div class="steprow" style="align-items:end"><div class="fld"><label>Company</label><select onchange="tmlCoOpen(this.value)"><option value="">New company</option>${tmlCos().map(x=>`<option value="${x.id}"${x.id===c.id?' selected':''}>${twEsc(x.name)}</option>`).join('')}</select></div><button class="btn" onclick="tmlCoNew()">＋ New company</button></div></div>
+    <div class="gaspanel"><h2>Details</h2><div class="steprow">
+      <div class="fld"><label>Company name</label><input id="tmlCoName" value="${twEsc(c.name)}" onchange="tmlCoSet('name',this.value)"></div>
+      <div class="fld"><label>Default item list</label><select onchange="tmlCoSet('defaultListId',this.value)"><option value="">None</option>${tmlLists().map(l=>`<option value="${l.id}"${l.id===c.defaultListId?' selected':''}>${twEsc(l.name)}</option>`).join('')}</select></div>
+      <label class="tmlchip" style="align-self:end"><input type="checkbox" ${c.active?'checked':''} onchange="tmlCoSet('active',this.checked)">Active</label>
+    </div></div>
+    <div class="gaspanel"><h2>Over-run terms</h2><div class="sub" id="tmlTermsText">${twEsc(tmlTermsText(c))}</div>${tmlTermFields(c,'','tmlCoSetTerm')}<button class="btn" onclick="tmlDefaultsSave()">Use these for new companies</button></div>
+    <div class="gaspanel"><h2>Surgeons (${c.surgeons.length})</h2>${surgeons || '<div class="sub">No surgeons yet.</div>'}
+      <div class="steprow" style="align-items:end;margin-top:10px"><div class="fld"><label>Add a surgeon</label><input id="tmlCoAdd" list="tmlCoNames" placeholder="Start typing a name" onkeydown="if(event.key==='Enter')tmlCoAddSurgeon()"><datalist id="tmlCoNames">${tmlKnownNames().map(n=>`<option value="${twEsc(n)}">`).join('')}</datalist></div><button class="btn" onclick="tmlCoAddSurgeon()">Add</button></div>
+    </div>
+    <div class="tmlbtns"><button class="btn primary" id="tmlCoSave" onclick="tmlCoSave()">Save company</button>${c.id?`<button class="btn" onclick="tmlCoDelete()">Delete company</button>`:''}</div>`;
+}
+function tmlCoAddSurgeon(){
+  const el = document.getElementById('tmlCoAdd'), n = el ? el.value.trim().replace(/\s+/g,' ') : '';
+  if(!n){ toast('Type or choose a surgeon'); return; }
+  if(!tml.co.surgeons.some(s=>tmlKey(s.name)===tmlKey(n))) tml.co.surgeons.push({name:n, terms:null});
+  tml.co.surgeons.sort((a,b)=>a.name.localeCompare(b.name));
+  render();
+}
+function tmlCoDropSurgeon(i){ tml.co.surgeons.splice(i, 1); render(); }
+function tmlCoOwnTerms(i, on){
+  const c = tml.co, s = c.surgeons[i];
+  if(!s) return;
+  s.terms = on ? {start:c.start, finish:c.finish, grace:c.grace, rate:c.rate, maxHours:c.maxHours, countFrom:c.countFrom, sharedHours:c.sharedHours} : null;
+  render();
+}
+async function tmlCoSave(){
+  const c = tml.co;
+  if(!c.name || !c.name.trim()){ toast('Enter a company name'); return; }
+  if(tmlTermsMissing(c)){ toast('Enter all the over-run terms'); return; }
+  try{
+    const id = await tmlRpc('tml_company_save', {p:c});
+    tml.co = null;
+    await tmlLoad(true);
+    tmlCoOpen(id);
+    if(!tml.form.companyId) tmlForm('companyId', id);
+    toast('Company saved');
+  }catch(e){ toast('Could not save: '+e.message); }
+}
+async function tmlCoDelete(){
+  const c = tml.co;
+  if(!c.id || !confirm('Delete '+c.name+'? Its surgeon list, terms and removals go too. Item lists are kept.')) return;
+  try{
+    await tmlRpc('tml_company_delete', {p_id:c.id});
+    tml.co = null; tml.form.companyId = ''; tml.report = null; tml.step = 'setup';
+    await tmlLoad(true);
+    tmlCoOpen(tml.form.companyId);
+    toast('Company deleted');
+  }catch(e){ toast('Could not delete: '+e.message); }
+}
+
+/* ---- item lists and prices ---- */
+function tmlListOpen(id){
+  const l = tmlList(id);
+  tml.li = l ? Object.assign(JSON.parse(JSON.stringify(l)), {edits:{}, q:'', raiseBy:'', raiseKind:'pct', raiseFrom:todayISO()}) : null;
+  if(!l) tmlListNew(); else render();
+}
+// a new list starts with every service ticked
+function tmlListNew(){
+  const items = (state.items||[]).filter(i=>i.tracker==='services' && !i.obsolete).map(i=>({itemId:i._row, selected:true, prices:[]}));
+  tml.li = {id:'', name:'', companyId:tml.form.companyId||'', surgeon:'', items, edits:{}, q:'', raiseBy:'', raiseKind:'pct', raiseFrom:todayISO()};
+  render();
+}
+function tmlLiSet(k, v){ if(tml.li) tml.li[k] = v; }
+function tmlLiNow(x, it){ return tmlLinePrice(x, it, null, todayISO(), tmlServiceTwin(it, state.items||[])); }
+function tmlListHtml(){
+  if(!tml.li){
+    const l = tmlList(tml.form.listId) || tmlLists()[0];
+    if(l) tml.li = Object.assign(JSON.parse(JSON.stringify(l)), {edits:{}, q:'', raiseBy:'', raiseKind:'pct', raiseFrom:todayISO()});
+    else { const items = (state.items||[]).filter(i=>i.tracker==='services' && !i.obsolete).map(i=>({itemId:i._row, selected:true, prices:[]})); tml.li = {id:'', name:'', companyId:tml.form.companyId||'', surgeon:'', items, edits:{}, q:'', raiseBy:'', raiseKind:'pct', raiseFrom:todayISO()}; }
+  }
+  const l = tml.li, byId = new Map((state.items||[]).map(i=>[i._row, i]));
+  const order = {services:0, consumables:1, meds:2, garments:3, linen:4, instruments:5};
+  const rows = l.items.map((x,i)=>({x, i, it:byId.get(x.itemId)})).filter(r=>r.it)
+    .sort((a,b)=>(order[a.it.tracker]-order[b.it.tracker]) || a.it.name.localeCompare(b.it.name));
+  const tr = rows.map(({x, i, it})=>{
+    const now = tmlLiNow(x, it), e = l.edits[x.itemId];
+    const std = it.billPrice!=null ? tmlMoney(it.billPrice) : '—';
+    const shown = e ? e.price : (now && now.source==='list' ? now.price : '');
+    const eff = e && e.price!=='' ? Number(e.price) : (now ? now.price : null);
+    const low = it.cost>0 && eff!=null && eff<it.cost;
+    return `<tr><td><input type="checkbox" ${x.selected?'checked':''} onchange="tmlLiTick(${i},this.checked)" aria-label="Include ${twEsc(it.name)}"></td><td>${twEsc(it.name)}</td><td>${twEsc(TML_TRACKERS[it.tracker]||it.tracker)}</td><td>${twEsc(it.code)}</td>
+      <td>${it.cost>0?tmlMoney(it.cost):'—'}</td><td>${std}</td>
+      <td><input type="number" min="0" step="0.01" value="${shown===''?'':twEsc(shown)}" placeholder="${now?twEsc(now.price.toFixed(2)):'Needs a price'}" style="width:96px" onchange="tmlLiPrice('${x.itemId}',this.value)">${low?'<div class="tmlwarn">Below purchase</div>':''}</td>
+      <td><input type="date" value="${e?twEsc(e.from||''):''}" title="Applies from this date" onchange="tmlLiFrom('${x.itemId}',this.value)" ${e?'':'disabled'}></td>
+      <td><button class="btn" style="padding:4px 9px;font-size:12px" onclick="tmlLiDrop(${i})">Remove</button></td></tr>`;
+  }).join('');
+  const q = tmlKey(l.q), inList = new Set(l.items.map(x=>x.itemId));
+  const hits = q.length>=2 ? (state.items||[]).filter(i=>!i.obsolete && !inList.has(i._row) && (tmlKey(i.name).includes(q) || tmlKey(i.code).includes(q) || tmlKey(i.barcode).includes(q))).slice(0,30) : [];
+  return `<div class="gaspanel"><div class="steprow" style="align-items:end"><div class="fld"><label>Item list</label><select onchange="tmlListOpen(this.value)"><option value="">New list</option>${tmlLists().map(x=>`<option value="${x.id}"${x.id===l.id?' selected':''}>${twEsc(x.name)}</option>`).join('')}</select></div><button class="btn" onclick="tmlListNew()">＋ New list (starts with all services)</button></div></div>
+    <div class="gaspanel"><h2>Details</h2><div class="steprow">
+      <div class="fld"><label>List name</label><input id="tmlLiName" value="${twEsc(l.name)}" onchange="tmlLiSet('name',this.value)"></div>
+      <div class="fld"><label>For company (optional)</label><select onchange="tmlLiSet('companyId',this.value)"><option value="">Any</option>${tmlCos().map(x=>`<option value="${x.id}"${x.id===l.companyId?' selected':''}>${twEsc(x.name)}</option>`).join('')}</select></div>
+      <div class="fld"><label>For surgeon (optional)</label><input value="${twEsc(l.surgeon||'')}" list="tmlLiNames" onchange="tmlLiSet('surgeon',this.value)"><datalist id="tmlLiNames">${tmlKnownNames().map(n=>`<option value="${twEsc(n)}">`).join('')}</datalist></div>
+    </div></div>
+    <div class="gaspanel"><h2>Raise prices on the ticked items</h2><div class="steprow" style="align-items:end">
+      <div class="fld"><label>By</label><input id="tmlRaiseBy" type="number" step="0.01" value="${twEsc(l.raiseBy)}" onchange="tmlLiSet('raiseBy',this.value)"></div>
+      <div class="fld"><label>Type</label><select onchange="tmlLiSet('raiseKind',this.value)"><option value="pct"${l.raiseKind==='pct'?' selected':''}>%</option><option value="gbp"${l.raiseKind==='gbp'?' selected':''}>£</option></select></div>
+      <div class="fld"><label>From date</label><input type="date" value="${twEsc(l.raiseFrom)}" onchange="tmlLiSet('raiseFrom',this.value)"></div>
+      <button class="btn" onclick="tmlLiRaise()">Apply</button></div><div class="sub" style="margin:6px 0 0">Earlier reports keep their old prices. Nothing is saved until you press Save list.</div></div>
+    <div class="gaspanel"><h2>Add from any tracker</h2><input id="tmlLiSearch" type="search" value="${twEsc(l.q)}" placeholder="Search by name, code or barcode" oninput="tmlLiSearch(this.value)" style="width:100%;max-width:420px">
+      <div id="tmlLiHits">${tmlLiHitsHtml(hits, l.q)}</div></div>
+    <div class="gaspanel"><h2>Items (${l.items.filter(x=>x.selected).length} ticked of ${l.items.length})</h2>
+      <div class="tmlwrap"><table class="tmltable"><thead><tr><th></th><th>Item</th><th>Tracker</th><th>Code</th><th>Purchase</th><th>Tracker / Services</th><th>This list's price</th><th>From</th><th></th></tr></thead><tbody>${tr||'<tr><td colspan="9">No items yet.</td></tr>'}</tbody></table></div></div>
+    <div class="tmlbtns"><button class="btn primary" id="tmlLiSave" onclick="tmlLiSave()">Save list</button>${l.id?`<button class="btn" onclick="tmlLiDelete()">Delete list</button>`:''}</div>`;
+}
+function tmlLiHitsHtml(hits, q){
+  if(String(q||'').trim().length<2) return '';
+  if(!hits.length) return '<div class="sub" style="margin:8px 0 0">Nothing found.</div>';
+  return hits.map(i=>`<div class="tmlline"><span><strong>${twEsc(i.name)}</strong> · ${twEsc(TML_TRACKERS[i.tracker]||i.tracker)}${i.code?' · '+twEsc(i.code):''}${i.billPrice!=null?' · '+tmlMoney(i.billPrice):''}</span><button class="btn" onclick="tmlLiAdd('${i._row}')">Add</button></div>`).join('');
+}
+function tmlLiSearch(v){
+  const l = tml.li; l.q = v;
+  const q = tmlKey(v), inList = new Set(l.items.map(x=>x.itemId));
+  const hits = q.length>=2 ? (state.items||[]).filter(i=>!i.obsolete && !inList.has(i._row) && (tmlKey(i.name).includes(q) || tmlKey(i.code).includes(q) || tmlKey(i.barcode).includes(q))).slice(0,30) : [];
+  const el = document.getElementById('tmlLiHits');
+  if(el) el.innerHTML = tmlLiHitsHtml(hits, v);
+}
+function tmlLiAdd(id){ if(!tml.li.items.some(x=>x.itemId===id)) tml.li.items.push({itemId:id, selected:true, prices:[]}); render(); }
+function tmlLiDrop(i){ const x = tml.li.items.splice(i, 1)[0]; if(x) delete tml.li.edits[x.itemId]; render(); }
+function tmlLiTick(i, on){ const x = tml.li.items[i]; if(x) x.selected = on; }
+function tmlLiDefaultFrom(id){
+  const x = tml.li.items.find(y=>y.itemId===id), it = (state.items||[]).find(y=>y._row===id);
+  return x && it && tmlLiNow(x, it) ? todayISO() : '';
+}
+function tmlLiPrice(id, v){
+  const l = tml.li;
+  if(v===''){ delete l.edits[id]; render(); return; }
+  l.edits[id] = {price:v, from:l.edits[id] ? l.edits[id].from : tmlLiDefaultFrom(id)};
+  render();
+}
+function tmlLiFrom(id, v){ if(tml.li.edits[id]) tml.li.edits[id].from = v; }
+function tmlLiRaise(){
+  const l = tml.li, by = Number(l.raiseBy);
+  if(!isFinite(by) || !by){ toast('Enter how much to raise by'); return; }
+  const byId = new Map((state.items||[]).map(i=>[i._row, i]));
+  let n = 0;
+  l.items.filter(x=>x.selected).forEach(x=>{
+    const it = byId.get(x.itemId); if(!it) return;
+    const e = l.edits[x.itemId], now = e && e.price!=='' ? Number(e.price) : ((tmlLiNow(x, it)||{}).price);
+    if(now==null) return;
+    const next = tmlRound(l.raiseKind==='pct' ? now*(1+by/100) : now+by);
+    if(next<0) return;
+    l.edits[x.itemId] = {price:String(next.toFixed(2)), from:l.raiseFrom||todayISO()}; n++;
+  });
+  toast(n+' price(s) changed. Press Save list to keep them');
+  render();
+}
+async function tmlLiSave(){
+  const l = tml.li;
+  if(!l.name || !l.name.trim()){ toast('Enter a name for the list'); return; }
+  const bad = Object.values(l.edits).some(e=>!isFinite(Number(e.price)) || Number(e.price)<0);
+  if(bad){ toast('A price is not valid'); return; }
+  try{
+    const p = {id:l.id, name:l.name, companyId:l.companyId, surgeon:l.surgeon, items:l.items.map(x=>({itemId:x.itemId, selected:x.selected}))};
+    if(l.updatedAt) p.updatedAt = l.updatedAt;
+    const id = await tmlRpc('tml_list_save', {p});
+    const prices = Object.keys(l.edits).map(itemId=>({itemId, price:tmlRound(l.edits[itemId].price), from:l.edits[itemId].from||''}));
+    if(prices.length) await tmlRpc('tml_prices_set', {p_list:id, p_prices:prices});
+    tml.li = null;
+    await tmlLoad(true);
+    if(!tml.form.listId) tml.form.listId = id;
+    tmlListOpen(id);
+    if(tml.report) tmlRecalc();
+    toast('List saved');
+  }catch(e){ toast('Could not save: '+e.message); }
+}
+async function tmlLiDelete(){
+  const l = tml.li;
+  if(!l.id || !confirm('Delete the list "'+l.name+'" and its prices?')) return;
+  try{
+    await tmlRpc('tml_list_delete', {p_id:l.id});
+    if(tml.form.listId===l.id){ tml.form.listId = ''; tml.report = null; tml.step = 'setup'; }
+    tml.li = null;
+    await tmlLoad(true);
+    render();
+    toast('List deleted');
+  }catch(e){ toast('Could not delete: '+e.message); }
+}
+
 /* ---------------- clinical monitoring ----------------
    Temperature, fridge and fluid-warmer checks, the hand hygiene audit and the theatre cleaning
    record. Ported from the old stand-alone "Clinical Monitoring Hub" page (temperature-checklist.html).
@@ -12416,6 +13493,7 @@ function nav(view){
   render();
   if(view==='procedures' && typeof procPoll==='function') procPoll();   // bring the running cases up to date
   if(view==='security' && typeof secLoad==='function') secLoad(true);   // always the latest ticks
+  if(view==='tml' && typeof tmlLoad==='function') tmlLoad(true);
   if(view==='users' && typeof usersLoadPins==='function'){ _showPins = false; usersLoadPins(); } }   // PINs hidden again each time the page opens
 // Item usage search sits under both Stock and Records, so a page can have two links: mark both.
 function navMarkActive(view){
@@ -12457,6 +13535,7 @@ function render(){
   else if(v==='offsite') m.innerHTML = offsiteView();
   else if(v==='services') m.innerHTML = servicesView();
   else if(v==='billing') m.innerHTML = billingReportView();
+  else if(v==='tml') m.innerHTML = tmlView();
   else if(v==='itemusage') m.innerHTML = itemUsageView();
   else if(v==='assets') m.innerHTML = assetsView();
   else if(v==='gas'){ m.innerHTML = gasView(); paintDeliv('o2'); paintDeliv('air'); }
@@ -13522,7 +14601,7 @@ if(session) myName = session.displayName || '';
    So with no ticks nothing here behaves differently. The server enforces the same thing
    (app_can); these only keep the page in step with it.
    PERM_MIN mirrors app_permissions.min_rank (the tests compare it with the migration). */
-const PERM_MIN = {'dashboard.view':0, 'stock.view':0, 'stock.manage':2, 'costs.view':1, 'stock.bulk':3, 'stock.delete':4, 'steril.view':0, 'steril.dispatch':1, 'steril.manage':2, 'stores.manage':2, 'obsolete.manage':2, 'stocktake.view':1, 'stocktake.sheet':3, 'alerts.view':1, 'assets.manage':2, 'implants.view':1, 'implants.manage':2, 'requests.use':0, 'requests.respond':1, 'requests.delete':2, 'log.view':0, 'proc.use':0, 'proc.manage':2, 'proc.prefill':4, 'billing.view':4, 'itemusage.view':4, 'samples.view':0, 'samples.edit':1, 'samples.delete':2, 'tw.view':0, 'gas.view':0, 'gas.manage':2, 'monitor.view':0, 'stickers.view':0, 'rota.view':3, 'rota.manage':3, 'rota.staff':3, 'users.manage':4};
+const PERM_MIN = {'dashboard.view':0, 'stock.view':0, 'stock.manage':2, 'costs.view':1, 'stock.bulk':3, 'stock.delete':4, 'steril.view':0, 'steril.dispatch':1, 'steril.manage':2, 'stores.manage':2, 'obsolete.manage':2, 'stocktake.view':1, 'stocktake.sheet':3, 'alerts.view':1, 'assets.manage':2, 'implants.view':1, 'implants.manage':2, 'requests.use':0, 'requests.respond':1, 'requests.delete':2, 'log.view':0, 'proc.use':0, 'proc.manage':2, 'proc.prefill':4, 'billing.view':4, 'itemusage.view':4, 'samples.view':0, 'samples.edit':1, 'samples.delete':2, 'tw.view':0, 'gas.view':0, 'gas.manage':2, 'monitor.view':0, 'stickers.view':0, 'rota.view':3, 'rota.manage':3, 'rota.staff':3, 'users.manage':4, 'tml.manage':4};
 // ticking the left one also ticks the right ones; unticking a right one unticks the left
 const PERM_NEEDS = {'stock.manage':['stock.view'], 'stock.bulk':['stock.view'], 'stock.delete':['stock.view'], 'steril.dispatch':['steril.view'],
   'steril.manage':['steril.view'], 'stocktake.sheet':['stocktake.view'], 'implants.manage':['implants.view'], 'requests.respond':['requests.use'],
@@ -14139,7 +15218,7 @@ const VIEW_KEY = {dashboard:'dashboard.view', 'dash-low':'dashboard.view', 'dash
   implants:'implants.view', log:'log.view', requests:'requests.use', alerts:'alerts.view', gas:'gas.view', monitor:'monitor.view',
   stocktake:'stocktake.view', values:'costs.view', itemusage:'itemusage.view', obsolete:'obsolete.manage', stores:'stores.manage',
   offsite:'stores.manage', services:'stores.manage', procedures:'proc.use', samples:'samples.view', theatreward:'tw.view',
-  billing:'billing.view', assets:'assets.manage', stickers:'stickers.view', labels:'stock.manage',
+  billing:'billing.view', tml:'tml.manage', assets:'assets.manage', stickers:'stickers.view', labels:'stock.manage',
   rota:'rota.view', rotaalloc:'rota.view', rotastaff:'rota.staff'};
 function viewAllowed(v){
   if(v==='security') return isDeveloper();   // Security group: developers only, never tickable
@@ -14154,6 +15233,7 @@ function viewAllowed(v){
   if(v==='offsite') return can('stores');
   if(v==='services') return can('stores');
   if(v==='billing') return isDeveloper();   // contract pricing data -- developer only
+  if(v==='tml') return isDeveloper('tml.manage');   // company invoices: developer only, never tickable
   if(v==='itemusage') return isDeveloper();
   if(v==='assets') return can('assets');
   if(v==='stickers') return can('sticker');
