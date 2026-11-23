@@ -381,6 +381,16 @@ same Google Sheet** (his choice over moving it to Supabase).
   `_pid`. A lookup that finds a record discards any draft that isn't that same patient's.
 - **Autosave only UPDATES a row it has confirmed exists.** Only the explicit Save buttons
   may add a row, after a lag-tolerant recheck (§9 #9).
+- **A record is identified by patient number + Date, never the number alone** (§9 #18). A patient
+  can have several rows.
+  - Lookup opens today's record directly. Otherwise Theatre asks "new operation, or a correction?"
+    (`twPickHtml`, `inst.pick`) and keeps the form hidden until someone chooses. Ward opens a single
+    record directly (overnight patients) and asks only when there are several.
+  - Every write finds its row again with `twResolveRow` (number + `inst.rowDate`). If it can't be
+    sure, it refuses (`twMovedError`) rather than writing to a remembered row number.
+  - Editing the number on an open record stops autosave, and Save asks whether it is a correction
+    or a new record. A number already used with another name or date of birth also asks first.
+  - Date is required on Save. A blank box never wipes a saved record's Date or Theatre.
 - Details: `bollin-clinic-project-notes.md` (git-ignored, local only).
 
 **Theatre rota** (superadmin+): replaces Ruby's transposed spreadsheet. Since the October 2026
@@ -937,6 +947,12 @@ Sheets-era notes and may be out of date; this file is the current reference.
       (`closePw`, `closePinDlg`), and make the `onclose` clean-up do nothing while it is open.
     - Headless Chrome with `--virtual-time-budget` does not show CSS animations faithfully in
       screenshots. Check animations in real time (DevTools protocol), or on staging.
+18. **Theatre & Ward replaced earlier records (found Nov 2026):** every lookup and save took the
+    first row with that patient number, so a returning patient's new operation was written over
+    their old one, and a mistyped number could land on someone else's row. Found by comparing an
+    older copy of the sheet with the live one. Fixed by identifying a row by number + date (§4).
+    **Rule:** never identify a clinical record by a field that can legitimately repeat, and never
+    write to a remembered row number without checking what is in that row now.
 
 ---
 

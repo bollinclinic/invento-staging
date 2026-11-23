@@ -10304,6 +10304,10 @@ function twBlankInstance(){
     knownRowIndex: null,    // cached sheet row index for knownRowIndexPid -- see twResolveRow
     knownRowIndexPid: null,
     knownRowValues: null,   // last-confirmed full row, kept alongside the index cache
+    rowDate: null,          // the open record's Date cell: patient number + date identify a row
+    rowDateAlts: [],        // a date this screen just replaced, until SharePoint's reads catch up
+    isNewRecord: false,     // "New record" was chosen for a patient who already has records
+    pick: null,             // a choice waiting on screen, see twPickHtml
   };
 }
 let _twByRoom = {};                      // Theatre role: room name -> its own instance
@@ -10417,6 +10421,8 @@ function twSaveDraft(){
     }
   });
   d._pid = String(('tw_pid' in d ? d.tw_pid : inst.currentPid) || '').trim();
+  if(inst.loadedRow && inst.rowDate != null) d._rowDate = inst.rowDate;   // which of this patient's records
+  if(inst.isNewRecord) d._new = true;
   inst.draft = d;
   try{ localStorage.setItem(inst.draftKey, JSON.stringify(d)); }catch(e){}
   twScheduleAutosave();
@@ -10501,10 +10507,68 @@ async function twUpdateRow(index, values){
   if(!data.ok) throw new Error(data.error || 'Failed to update row');
   return data;
 }
-async function twFindRowByPid(pid){
+// A patient can have several records, because they can come back for another operation. So the
+// patient number alone never identifies a row: patient number + the record's Date does. Finding
+// the first row with that number used to replace a returning patient's earlier record.
+function twRowDateOf(v){ return String(twCellDisplay(TW_COL.date, v ? v[TW_COL.date] : '') || '').trim(); }
+function twSamePid(v, pid){ return String(v[TW_COL.pid]).trim() === String(pid).trim(); }
+function twRowsOfPid(rows, pid){ return rows.filter(r => twSamePid(r.values[0], pid)); }
+function twSortRecords(rows){ return rows.slice().sort((a,b) => twRowDateOf(b.values[0]).localeCompare(twRowDateOf(a.values[0]))); }
+function twDateText(d){ const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(d||'')); return m ? m[3]+'/'+m[2]+'/'+m[1] : (d || 'no date'); }
+function twEsc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
+function twMovedError(){
+  const e = new Error('This record has changed since it was opened. Look the patient up again before saving');
+  e.twMoved = true;
+  return e;
+}
+async function twFindRowsByPid(pid){
   const rows = await twGetRows();
-  const idx = rows.findIndex(r => String(r.values[0][TW_COL.pid]).trim() === String(pid).trim());
-  return { rows, idx };
+  return { rows, matches: twRowsOfPid(rows, pid) };
+}
+function twForgetRecord(inst){
+  inst.currentPid = null;
+  inst.loadedRow = null;
+  inst.prefillPid = '';
+  inst.rowDate = null;
+  inst.rowDateAlts = [];
+  inst.isNewRecord = false;
+  inst.pick = null;
+}
+// After a write: this is now the record's date. The old one stays acceptable until reads catch up.
+function twNoteRowDate(inst, row){
+  const d = twRowDateOf(row);
+  if(inst.rowDate != null && inst.rowDate !== d) inst.rowDateAlts = [inst.rowDate];
+  inst.rowDate = d;
+  inst.knownRowValues = row;
+  if(twDraftOwner(inst.draft) && inst.draft._rowDate !== d){
+    inst.draft._rowDate = d;
+    try{ localStorage.setItem(inst.draftKey, JSON.stringify(inst.draft)); }catch(e){}
+  }
+}
+// A record's date and theatre are what find it again, so a blank box never wipes them.
+function twKeepIdentity(rowData, base){
+  if(!base) return;
+  [TW_COL.date, TW_COL.theatreNumber].forEach(c => {
+    if(String(rowData[c]==null?'':rowData[c]).trim()==='' && base[c]!=null && base[c]!=='') rowData[c] = base[c];
+  });
+}
+function twSamePerson(a, b){
+  const n = x => String(x==null?'':x).trim().toLowerCase().replace(/\s+/g,' ');
+  const an = n(a[TW_COL.patientName]), bn = n(b[TW_COL.patientName]);
+  const ad = String(twCellDisplay(TW_COL.dob, a[TW_COL.dob])), bd = String(twCellDisplay(TW_COL.dob, b[TW_COL.dob]));
+  if(an && bn && an !== bn) return false;
+  if(ad && bd && ad !== bd) return false;
+  return true;
+}
+// Before a write that would add or re-number a record: does anything need a person's decision?
+function twWriteQuestion(matches, rowData, mode, explicitNew){
+  if(!matches.length) return null;
+  const other = matches.filter(r => !twSamePerson(r.values[0], rowData));
+  if(other.length) return {kind:'otherPatient', mode, rows:twSortRecords(other)};
+  const date = twRowDateOf(rowData);
+  const same = matches.filter(r => twRowDateOf(r.values[0]) === date);
+  if(same.length && (explicitNew || mode==='asNew' || mode==='changePid' || same.length>1)) return {kind:'sameday', mode, rows:twSortRecords(same)};
+  return null;
 }
 // Bundled fix for a second, distinct bug: SharePoint/Graph read-after-write lag meant a
 // getRows() shortly after this same patient's own last write could still not show it yet,
@@ -10515,14 +10579,37 @@ async function twFindRowByPid(pid){
 // treated as lag, not a genuine new patient, and reused as an update instead of a duplicate add.
 async function twResolveRow(inst, pid){
   const rows = await twGetRows();
-  const idx = rows.findIndex(r => String(r.values[0][TW_COL.pid]).trim() === String(pid).trim());
-  if(idx >= 0){
-    const existing = rows[idx].values[0];
-    inst.knownRowIndex = rows[idx].index; inst.knownRowIndexPid = pid; inst.knownRowValues = existing;
-    return { index: rows[idx].index, existing, stale:false };
+  const mine = twRowsOfPid(rows, pid);
+  const knownIndex = inst.knownRowIndexPid === pid ? inst.knownRowIndex : null;
+  const useRow = r => {
+    const existing = r.values[0];
+    if(twRowDateOf(existing) === inst.rowDate) inst.rowDateAlts = [];
+    inst.knownRowIndex = r.index; inst.knownRowIndexPid = pid; inst.knownRowValues = existing;
+    return { index: r.index, existing, stale:false };
+  };
+  const base = inst.rowDate != null ? inst.rowDate
+    : (inst.knownRowIndexPid === pid && inst.knownRowValues ? twRowDateOf(inst.knownRowValues) : null);
+  if(base != null){
+    const dates = [base].concat(inst.rowDateAlts || []);
+    const same = mine.filter(r => dates.includes(twRowDateOf(r.values[0])));
+    let hit = same.find(r => r.index === knownIndex) || (same.length === 1 ? same[0] : null);
+    if(!hit && same.length > 1){     // the same patient twice on one date: the one that still looks like ours
+      const k = inst.knownRowValues || [];
+      const looks = same.filter(r => [TW_COL.timeSent, TW_COL.intoTheatre].every(c => twCellDisplay(c, r.values[0][c]) === twCellDisplay(c, k[c])));
+      if(looks.length !== 1) throw twMovedError();
+      hit = looks[0];
+    }
+    if(hit) return useRow(hit);
+    if(mine.length) throw twMovedError();     // this patient's other records are never a substitute
+  } else if(mine.length){
+    if(mine.length === 1) return useRow(mine[0]);
+    throw twMovedError();
   }
-  if(inst.knownRowIndexPid === pid && inst.knownRowIndex != null){
-    return { index: inst.knownRowIndex, existing: inst.knownRowValues, stale:true };
+  // Not visible at all. That can be SharePoint's read lag, but only if the remembered row number
+  // isn't now showing somebody else.
+  if(knownIndex != null){
+    if(rows.some(r => r.index === knownIndex)) throw twMovedError();
+    return { index: knownIndex, existing: inst.knownRowValues, stale:true };
   }
   return { index: -1, existing: null, stale:false };
 }
@@ -10600,6 +10687,13 @@ function twScheduleAutosave(){
   // when the timer goes off.
   const inst = twActive;
   if(!(inst.draft.tw_pid||'').trim()) return;
+  // The patient number was edited on an open record: only the Save button may decide what that means.
+  if(inst.currentPid && (inst.draft.tw_pid||'').trim() !== String(inst.currentPid).trim()){
+    clearTimeout(inst.autosaveTimer);
+    inst.autosaveState = 'pidchanged';
+    twRefreshAutosaveBadge(inst);
+    return;
+  }
   if(!inst.currentPid){
     // No confirmed row yet for this patient. The row-index cache (twResolveRow) only stops
     // autosave from DUPLICATING an existing row -- it can't stop it from repeatedly CREATING
@@ -10667,27 +10761,32 @@ async function twAutosaveNow(inst){
   // re-checked here too in case "New / clear form" or a fresh lookup ran while this was
   // waiting its turn, which must never let a stale timer create/update the wrong row.
   if(!pid || !inst.currentPid){ inst.autosaveState = null; return; }
+  if(pid !== String(inst.currentPid).trim()){ inst.autosaveState = 'pidchanged'; twRefreshAutosaveBadge(inst); return; }
   inst.autosaveState = 'saving';
   twRefreshAutosaveBadge(inst);
+  let skipped = false;
   try{
     await twSerializeWrite(inst, async () => {
+      // While this waited its turn the screen may have moved on to another record.
+      if(String(inst.currentPid||'').trim() !== pid || (inst.draft.tw_pid||'').trim() !== pid){ skipped = true; return; }
       // Built inside the queued job, not before it -- so if this had to wait its turn behind
       // another write, it still reflects the latest draft rather than a stale snapshot.
       const rowData = twBuildAutosaveRow(inst);
-      const { index } = await twResolveRow(inst, pid);
+      const { index, existing } = await twResolveRow(inst, pid);
       if(index >= 0){
+        twKeepIdentity(rowData, existing);
         await twUpdateRow(index, rowData);
         // Only adopt the freshly-saved row as "current" if the draft is still for the same
         // patient -- the user may have already looked up someone else while this was in flight.
-        if((inst.draft.tw_pid||'').trim() === pid){ inst.currentPid = pid; inst.loadedRow = rowData; }
+        if((inst.draft.tw_pid||'').trim() === pid){ inst.currentPid = pid; inst.loadedRow = rowData; twNoteRowDate(inst, rowData); }
       }
       // else: genuinely can't resolve this row right now (extremely rare -- would mean the row
       // vanished after having been confirmed). Autosave NEVER creates a row -- do nothing and
       // let the next explicit Save or lookup sort it out, rather than risk a duplicate.
     });
-    inst.autosaveState = 'saved';
+    inst.autosaveState = skipped ? null : 'saved';
   }catch(e){
-    inst.autosaveState = 'error';
+    inst.autosaveState = e && e.twMoved ? 'moved' : 'error';
   }
   twRefreshAutosaveBadge(inst);
 }
@@ -10697,7 +10796,9 @@ function twAutosaveStatusHtml(){
     pending: ['● Unsaved changes — saving shortly…', 'var(--amber)'],
     saving:  ['● Saving to SharePoint…', 'var(--amber)'],
     saved:   ['✓ All changes saved to SharePoint', 'var(--pine)'],
-    error:   ['⚠ Autosave failed — check your connection (your entry is still kept on this device)', 'var(--red)']
+    error:   ['⚠ Autosave failed — check your connection (your entry is still kept on this device)', 'var(--red)'],
+    moved:   ['⚠ Not saved — this record changed elsewhere. Look the patient up again (your entry is kept on this device)', 'var(--red)'],
+    pidchanged: ['⚠ Patient number changed — press "Save Theatre Record" to choose what to do', 'var(--red)']
   };
   const m = map[twActive.autosaveState];
   return `<span id="twAutosaveStatus" style="font-size:12.5px;color:${m?m[1]:'var(--ink-soft)'};margin-left:10px">${m?m[0]:''}</span>`;
@@ -10757,12 +10858,12 @@ function twRecoveryListHtml(){
         <td>${p.pid}</td><td>${p.initials}</td>
         <td>${p.date ? new Date(p.date).toLocaleDateString('en-GB') : ''}</td>
         <td>${p.surgeon}</td>
-        <td><button class="btn" style="padding:5px 10px;font-size:12px" onclick="twOpenFromRecoveryList('${p.pid.replace(/'/g,"\\'")}')">Open</button></td>
+        <td><button class="btn" style="padding:5px 10px;font-size:12px" onclick="twOpenFromRecoveryList('${p.pid.replace(/'/g,"\\'")}','${p.date}')">Open</button></td>
       </tr>`).join('')}</tbody></table>`;
 }
-function twOpenFromRecoveryList(pid){
+function twOpenFromRecoveryList(pid, date){
   const el = document.getElementById('twPidLookup'); if(el) el.value = pid;
-  twLookupPatient();
+  twLookupPatient(date);
 }
 
 function twSwitchRole(role){
@@ -10780,7 +10881,7 @@ function twSwitchRole(role){
     twLookupPatient();
     return;
   }
-  twActive.currentPid = null; twActive.loadedRow = null; twActive.prefillPid = '';
+  twForgetRecord(twActive);
   twActive.status = {level:'amber', text:'No patient selected — search by ID'+(role==='theatre'?', or fill in a new record':'')};
   render();
 }
@@ -10803,13 +10904,129 @@ function twSwitchRoom(room){
 }
 function twResetForm(){
   twClearDraft();
-  twActive.currentPid = null; twActive.loadedRow = null; twActive.prefillPid = '';
+  twForgetRecord(twActive);
   window._surgeonPick['twSurgeon'] = null; window._surgeonPick['twSurgeon2'] = null;
   twActive.status = {level:'amber', text:'No patient selected — search by ID'+(twRole==='theatre'?', or fill in a new record':'')};
   render();
 }
 
-async function twLookupPatient(){
+// Which of this patient's records does this lookup mean? null = a person has to choose.
+function twChooseRow(inst, matches, wantDate, draft, pid){
+  const byDate = d => matches.filter(r => twRowDateOf(r.values[0]) === d);
+  const tries = [wantDate, draft ? draft._rowDate : null, inst.currentPid === pid ? inst.rowDate : null, draft && draft.tw_date ? draft.tw_date : null];
+  for(const d of tries){
+    if(d == null) continue;
+    const m = byDate(d);
+    if(m.length === 1) return m[0];
+    if(m.length > 1) return null;
+  }
+  const today = byDate(todayISO());
+  if(today.length === 1) return today[0];
+  if(today.length > 1) return null;
+  // Ward staff only add ward times, often the morning after, so one record needs no question.
+  return twRole === 'ward' && matches.length === 1 ? matches[0] : null;
+}
+function twOpenRow(inst, row, pid){
+  const v = row.values[0];
+  inst.currentPid = pid; inst.loadedRow = v; inst.prefillPid = '';
+  inst.isNewRecord = false; inst.pick = null;
+  inst.knownRowIndex = row.index; inst.knownRowIndexPid = pid; inst.knownRowValues = v;
+  inst.rowDate = twRowDateOf(v); inst.rowDateAlts = [];
+  const surgeonName = v[TW_COL.surgeonName]||'';
+  const surgeon2Name = v[TW_COL.surgeon2]||'';
+  window._surgeonPick['twSurgeon'] = (state.surgeons||[]).find(s=>s.name===surgeonName) || null;
+  window._surgeonPick['twSurgeon2'] = (state.surgeons||[]).find(s=>s.name===surgeon2Name) || null;
+  const who = v[TW_COL.patientName]||pid;
+  inst.status = inst.rowDate === todayISO()
+    ? {level:'green', text:'Loaded record for '+who}
+    : {level:'amber', text:'Loaded record for '+who+' from '+twDateText(inst.rowDate)+' — changes here update that operation'};
+  if(twDraftOwner(inst.draft) === pid && inst.draft._rowDate !== inst.rowDate){
+    inst.draft._rowDate = inst.rowDate;
+    try{ localStorage.setItem(inst.draftKey, JSON.stringify(inst.draft)); }catch(e){}
+  }
+}
+function twOfferRecords(inst, matches, pid){
+  twForgetRecord(inst);
+  inst.prefillPid = pid;
+  inst.pick = {kind:'records', pid, rows:twSortRecords(matches)};
+  const n = matches.length;
+  inst.status = {level:'amber', text: twRole==='ward'
+    ? 'This patient has '+n+' records — choose the operation to update'
+    : 'This patient already has '+n+(n===1?' record':' records')+' — is this a new operation?'};
+}
+function twPickOpen(i){
+  const inst = twActive, p = inst.pick;
+  if(!p || !p.rows[i]) return;
+  const row = p.rows[i], pid = p.pid;
+  // Typing kept for one operation must never land on another one.
+  if(p.kind !== 'records' || twDraftOwner(inst.draft) !== pid || inst.draft._rowDate !== twRowDateOf(row.values[0])) twClearDraft(inst);
+  const el = document.getElementById('twPidLookup'); if(el) el.value = pid;
+  twOpenRow(inst, row, pid);
+  render();
+}
+function twPickNew(){
+  const inst = twActive, p = inst.pick;
+  if(!p || twRole !== 'theatre') return;
+  const pid = p.pid, v = p.rows[0].values[0];
+  const keep = twDraftOwner(inst.draft) === pid ? inst.draft : {};
+  const d = Object.assign({}, keep, {_v:2, _pid:pid, _new:true, tw_pid:pid});
+  delete d._rowDate;
+  if(d.tw_date == null) d.tw_date = todayISO();
+  if(d.tw_patientName == null && v[TW_COL.patientName]) d.tw_patientName = String(v[TW_COL.patientName]);
+  if(d.tw_dob == null && v[TW_COL.dob]) d.tw_dob = twCellDisplay(TW_COL.dob, v[TW_COL.dob]);
+  inst.knownRowIndex = null; inst.knownRowIndexPid = null; inst.knownRowValues = null;
+  twForgetRecord(inst);
+  inst.prefillPid = pid; inst.isNewRecord = true; inst.draft = d;
+  try{ localStorage.setItem(inst.draftKey, JSON.stringify(d)); }catch(e){}
+  window._surgeonPick['twSurgeon'] = null; window._surgeonPick['twSurgeon2'] = null;
+  inst.autosaveState = 'localonly';
+  inst.status = {level:'amber', text:'New record for '+pid+' — not saved yet. Their earlier records are kept'};
+  render();
+}
+function twPickSave(mode){
+  const inst = twActive, p = inst.pick;
+  if(!p) return;
+  inst.pick = null;
+  return p.kind === 'pidchange' ? twSubmitTheatre({mode}) : twSubmitTheatre({mode:p.mode, force:true});
+}
+function twPickCancel(){
+  const inst = twActive;
+  inst.pick = null;
+  inst.status = {level:'amber', text:'Not saved — check the details, then press Save'};
+  render();
+}
+function twPickHtml(){
+  const p = twActive.pick;
+  if(!p) return '';
+  const line = (r, i, label) => {
+    const v = r.values[0];
+    const who = p.kind === 'otherPatient' ? 'Initials '+twInitials(v[TW_COL.patientName])+' · ' : '';
+    const bits = [v[TW_COL.theatreNumber], v[TW_COL.procedure], v[TW_COL.surgeonName]].filter(Boolean).map(twEsc).join(' · ');
+    return `<div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;padding:9px 0;border-top:1px solid var(--line)">
+      <strong>${twEsc(twDateText(twRowDateOf(v)))}</strong><span style="flex:1;min-width:180px">${twEsc(who)}${bits}</span>
+      <button class="btn" onclick="twPickOpen(${i})">${label}</button></div>`;
+  };
+  const box = (title, rows, buttons) => `<div id="twPickBox" style="margin-top:12px;padding:12px 14px;border:1px solid var(--amber);border-radius:10px">
+      <div style="font-weight:700;margin-bottom:8px">${title}</div>${rows}
+      <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px">${buttons}</div></div>`;
+  const back = `<button class="btn" onclick="twPickCancel()">Go back</button>`;
+  if(p.kind === 'records'){
+    const rows = p.rows.map((r,i) => line(r, i, twRole==='ward' ? 'Update this one' : 'Correct this record')).join('');
+    return twRole === 'ward' ? box('Which operation are these ward times for?', rows, '')
+      : box('New operation, or a correction to an earlier one?', rows, `<button class="btn primary" id="twPickNewBtn" onclick="twPickNew()">＋ New record for this operation</button>`);
+  }
+  if(p.kind === 'sameday') return box('This patient already has a record on this date.',
+    p.rows.map((r,i) => line(r, i, 'Open it instead (discards this entry)')).join(''),
+    `<button class="btn" onclick="twPickSave()">Save as a separate record</button>${back}`);
+  if(p.kind === 'otherPatient') return box('This patient number is already used with a different name or date of birth. Please check the number.',
+    p.rows.map((r,i) => line(r, i, 'Open that record (discards this entry)')).join(''),
+    `<button class="btn" onclick="twPickSave()">The number is right, save anyway</button>${back}`);
+  return box(`You changed the patient number from ${twEsc(p.oldPid)} to ${twEsc(p.pid)}.`, '',
+    `<button class="btn" onclick="twPickSave('changePid')">Correct the number on this record</button>
+     <button class="btn" onclick="twPickSave('asNew')">Keep that record, save this as a new one</button>${back}`);
+}
+
+async function twLookupPatient(wantDate){
   const inst = twActive;
   const pid = twVal('twPidLookup').trim();
   if(!pid){ toast('Enter a Patient ID to search'); return; }
@@ -10818,29 +11035,34 @@ async function twLookupPatient(){
   // throw away what you've just entered.
   const owner = twDraftOwner(inst.draft);
   if(owner && owner !== pid) twClearDraft(inst);
+  inst.pick = null;
   const el = document.getElementById('twStatusWrap');
   if(el) el.innerHTML = '<span class="badge b-low">Searching…</span>';
   try{
-    const { rows, idx } = await twFindRowByPid(pid);
-    if(idx < 0){
-      inst.currentPid = null; inst.loadedRow = null; inst.prefillPid = pid;
+    const { matches } = await twFindRowsByPid(pid);
+    if(!matches.length){
+      const stillNew = twDraftOwner(inst.draft) === pid && !!inst.draft._new;
+      twForgetRecord(inst);
+      inst.prefillPid = pid; inst.isNewRecord = stillNew;
       window._surgeonPick['twSurgeon'] = null; window._surgeonPick['twSurgeon2'] = null;
       inst.status = twRole==='ward'
         ? {level:'red', text:'No theatre record found for '+pid+' — ask theatre staff to save one first'}
         : {level:'amber', text:'No existing record for '+pid+' — fill in a new theatre record below'};
     } else {
-      const v = rows[idx].values[0];
       // A draft may only sit on top of a real saved record when it's that same patient's own
       // unsaved edit. A leftover draft with no patient number (e.g. "Today" clicked on an empty
       // form earlier) must never be layered over a record that actually loaded.
       if(twDraftOwner(inst.draft) !== pid) twClearDraft(inst);
-      inst.currentPid = pid; inst.loadedRow = v; inst.prefillPid = '';
-      inst.knownRowIndex = rows[idx].index; inst.knownRowIndexPid = pid; inst.knownRowValues = v;
-      const surgeonName = v[TW_COL.surgeonName]||'';
-      const surgeon2Name = v[TW_COL.surgeon2]||'';
-      window._surgeonPick['twSurgeon'] = (state.surgeons||[]).find(s=>s.name===surgeonName) || null;
-      window._surgeonPick['twSurgeon2'] = (state.surgeons||[]).find(s=>s.name===surgeon2Name) || null;
-      inst.status = {level:'green', text:'Loaded record for '+(v[TW_COL.patientName]||pid)};
+      const d = twDraftOwner(inst.draft) === pid ? inst.draft : null;
+      if(d && d._new && twRole === 'theatre'){
+        twForgetRecord(inst);
+        inst.prefillPid = pid; inst.isNewRecord = true;
+        inst.status = {level:'amber', text:'New record for '+pid+' — not saved yet. Their earlier records are kept'};
+      } else {
+        const row = twChooseRow(inst, matches, wantDate, d, pid);
+        if(row) twOpenRow(inst, row, pid);
+        else twOfferRecords(inst, matches, pid);
+      }
     }
   }catch(err){
     inst.status = {level:'red', text:err.message};
@@ -10855,14 +11077,25 @@ async function twLookupPatient(){
   render();
 }
 
-async function twSubmitTheatre(){
+async function twSubmitTheatre(opts){
+  opts = opts || {};
   const inst = twActive;
   const pid = twVal('tw_pid').trim();
   if(!pid){ toast('Patient ID is required'); return; }
+  const date = twVal('tw_date').trim();
+  if(!date){ toast('Enter the date of this operation'); return; }
   const surgeonRes = twResolveSurgeonName('twSurgeon', inst.loadedRow ? inst.loadedRow[TW_COL.surgeonName] : '');
   if(!surgeonRes.ok){ toast('Select a surgeon from the list, or clear the field'); return; }
   const surgeon2Res = twResolveSurgeonName('twSurgeon2', inst.loadedRow ? inst.loadedRow[TW_COL.surgeon2] : '');
   if(!surgeon2Res.ok){ toast('Select the second surgeon from the list, or clear the field'); return; }
+  // A different number on an open record could be a correction or a new patient: never guess.
+  if(inst.currentPid && inst.loadedRow && pid !== String(inst.currentPid).trim() && !opts.mode){
+    inst.pick = {kind:'pidchange', pid, oldPid:inst.currentPid, mode:'', rows:[]};
+    inst.status = {level:'red', text:'Not saved yet — the patient number was changed'};
+    render();
+    return;
+  }
+  inst.pick = null;
   const btn = document.getElementById('twTheatreSaveBtn');
   if(btn){ btn.disabled = true; btn.textContent = 'Saving…'; }
   // Captured now, at click time -- not inside the queued job below, which may have to wait its
@@ -10889,24 +11122,26 @@ async function twSubmitTheatre(){
   rowData[TW_COL.finishedSuturing] = twVal('tw_finishedSuturing');
   rowData[TW_COL.intoRecovery]     = twVal('tw_intoRecovery');
   const patientNameForStatus = twVal('tw_patientName');
-  let isNew = true;
+  const explicitNew = !!(inst.isNewRecord || (inst.draft && inst.draft._new));
+  let isNew = true, ask = null;
   try{
     // Look-up-then-write goes through this instance's own queue (see twSerializeWrite) so this
     // can never race with an in-flight autosave or a ward save for the SAME room and create a
     // duplicate row -- while a different theatre's save runs on its own queue, unaffected.
     await twSerializeWrite(inst, async () => {
-      let { index, existing } = await twResolveRow(inst, pid);
-      if(index < 0){
-        // About to create a brand-new row -- the one write autosave is no longer allowed to
-        // make, and therefore the one place a duplicate can still originate: another device/tab
-        // may have just created this exact row moments ago and this read simply hasn't caught up
-        // yet (SharePoint/Graph read-after-write lag). A single short wait-and-recheck turns most
-        // such races into a normal update instead of a duplicate add -- worth the brief pause
-        // since this only happens once per patient, not on every autosave tick.
-        await new Promise(res=>setTimeout(res, 1500));
-        ({ index, existing } = await twResolveRow(inst, pid));
-      }
-      if(index >= 0){
+      // An open record is updated where it is, found by its own patient number and date.
+      if(inst.currentPid && inst.loadedRow && opts.mode !== 'asNew'){
+        if(pid !== String(inst.currentPid).trim() && !opts.force){
+          const { matches } = await twFindRowsByPid(pid);
+          ask = twWriteQuestion(matches, rowData, 'changePid', false);
+          if(ask) return;
+        }
+        let { index, existing } = await twResolveRow(inst, inst.currentPid);
+        if(index < 0){
+          await new Promise(res=>setTimeout(res, 1500));
+          ({ index, existing } = await twResolveRow(inst, inst.currentPid));
+        }
+        if(index < 0) throw twMovedError();
         // Preserve any ward columns already on this row -- the original page always sent a
         // blank ward section on a theatre-side save, which would silently wipe recovery/
         // discharge times if a theatre record was ever corrected after ward staff had already
@@ -10918,19 +11153,50 @@ async function twSubmitTheatre(){
         rowData[TW_COL.intoWard]      = base[TW_COL.intoWard]      || '';
         rowData[TW_COL.timeDischarge] = base[TW_COL.timeDischarge] || '';
         rowData[TW_COL.dateDischarge] = base[TW_COL.dateDischarge] || '';
+        twKeepIdentity(rowData, base);
         await twUpdateRow(index, rowData);
+        isNew = false;
+        return;
+      }
+      // No record open. Another device may have just created this same record and this read
+      // may not show it yet (SharePoint/Graph read-after-write lag), so one short wait-and-recheck
+      // turns most such races into a normal update instead of a duplicate add. A row for this
+      // patient on a DIFFERENT date is another operation: it is left alone and a new row is added.
+      let { matches } = await twFindRowsByPid(pid);
+      if(!matches.some(r => twRowDateOf(r.values[0]) === date)){
+        await new Promise(res=>setTimeout(res, 1500));
+        ({ matches } = await twFindRowsByPid(pid));
+      }
+      if(!opts.force){
+        ask = twWriteQuestion(matches, rowData, opts.mode || 'add', explicitNew);
+        if(ask) return;
+      }
+      const same = matches.filter(r => twRowDateOf(r.values[0]) === date);
+      if(same.length === 1 && !explicitNew && !opts.force && opts.mode !== 'asNew'){
+        // The same record, reached without opening it: a blank box here never wipes a saved value.
+        const base = same[0].values[0];
+        await twUpdateRow(same[0].index, rowData.map((x,c) => String(x==null?'':x).trim()==='' && base[c]!=null ? base[c] : x));
         isNew = false;
       } else {
         await twAddRow(rowData);
         isNew = true;
       }
     });
+    if(ask){
+      ask.pid = pid;
+      inst.pick = ask;
+      inst.status = {level:'red', text: ask.kind==='otherPatient'
+        ? 'Not saved — this patient number is already used for someone else'
+        : 'Not saved — this patient already has a record on this date'};
+      render();
+      return;
+    }
     // Done with this save -- reset back to the lookup state (mirroring Ward's own post-save
     // reset) instead of leaving the just-saved patient's data sitting on screen indefinitely.
     // The record itself is safe in SharePoint either way; look the same ID up again to add more
     // times later, exactly like re-opening any other saved record.
     twClearDraft(inst);
-    inst.currentPid = null; inst.loadedRow = null; inst.prefillPid = '';
+    twForgetRecord(inst);
     const lookupEl = document.getElementById('twPidLookup'); if(lookupEl) lookupEl.value = '';
     inst.status = {level:'green', text:'Theatre record '+(isNew?'created':'updated')+' for '+(patientNameForStatus||pid)+' — look up the same ID to add more, or start the next patient below'};
     toast(isNew ? '✓ New theatre record saved' : '✓ Theatre record updated');
@@ -10988,7 +11254,7 @@ async function twSubmitWard(){
     // lookup/recovery-list state so the screen visibly changes and is immediately ready for
     // whoever's next.
     twClearDraft(inst);
-    inst.currentPid = null; inst.loadedRow = null; inst.prefillPid = '';
+    twForgetRecord(inst);
     const lookupEl = document.getElementById('twPidLookup'); if(lookupEl) lookupEl.value = '';
     inst.status = {level:'green', text:'Ward record saved for '+savedName+' — look up the next patient, or pick one below'};
     toast('✓ Ward record saved');
@@ -11051,7 +11317,7 @@ function twTheatreFormHtml(){
     <div class="gaspanel">
       <h2>Theatre record</h2>
       <div class="steprow">
-        ${twDateFieldHtml('tw_date', 'Date', g(TW_COL.date), chg)}
+        ${twDateFieldHtml('tw_date', 'Date *', g(TW_COL.date) || (r ? '' : todayISO()), chg)}
         <div class="fld"><label>Theatre / Room</label><select id="tw_theatreNumber"${chg}
           style="padding:10px 12px;border:1px solid var(--line);border-radius:9px">
           <option value=""></option>${TW_ROOMS.map(room=>`<option ${g(TW_COL.theatreNumber)===room?'selected':''}>${room}</option>`).join('')}</select></div>
@@ -11191,9 +11457,10 @@ function theatreWardView(){
         <button class="btn" onclick="twLookupPatient()">Look up</button>
         <button class="btn" onclick="twResetForm()" title="Clear this form">↺ New / clear form</button>
       </div>
-      <div id="twStatusWrap" style="margin-top:10px"><span class="badge ${twStatusBadgeClass(twActive.status.level)}">${twActive.status.text}</span></div>
+      <div id="twStatusWrap" style="margin-top:10px"><span class="badge ${twStatusBadgeClass(twActive.status.level)}">${twEsc(twActive.status.text)}</span></div>
+      ${twPickHtml()}
     </div>
-    ${twRole==='theatre' ? twTheatreFormHtml() : twWardFormHtml()}`;
+    ${twActive.pick && twActive.pick.kind==='records' ? '' : (twRole==='theatre' ? twTheatreFormHtml() : twWardFormHtml())}`;
 }
 
 /* ---------------- clinical monitoring ----------------
