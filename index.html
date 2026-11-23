@@ -774,6 +774,9 @@
   .tmltable{white-space:nowrap}
   .tmltotal td{font-weight:800}
   #main .tmlbtns input,#main .tmlbtns select{padding:7px 9px;border:1px solid var(--line);border-radius:8px}
+  .tmlroot .fld input:not([type=checkbox]),.tmlroot .fld select,.tmlroot input[type=search]{padding:9px 11px;border:1px solid var(--line);border-radius:9px;background:var(--card);color:var(--ink);max-width:100%}
+  .tmlroot .tmltable input:not([type=checkbox]){padding:6px 8px;border:1px solid var(--line);border-radius:7px;background:var(--card);color:var(--ink)}
+  .tmlroot summary{cursor:pointer}
 </style>
 </head>
 <body>
@@ -12157,11 +12160,11 @@ function tmlView(){
   if(tml.error) body = `<div class="gaspanel"><strong>Could not load the TML Report.</strong><div class="sub">${twEsc(tml.error)}</div><button class="btn" onclick="tmlLoad(true)">Try again</button></div>`;
   else if(!tml.cfg) body = `<div class="sub">Loading…</div>`;
   else body = tml.tab==='companies' ? tmlCoHtml() : tml.tab==='lists' ? tmlListHtml() : tmlRunHtml();
-  return `<h1>TML Report</h1>
+  return `<div class="tmlroot"><h1>TML Report</h1>
     <div class="sub">Theatre over-runs and billable items and services, per company.</div>
     <div class="tmltabs">${tab('run','Run a report')}${tab('companies','Companies &amp; surgeons')}${tab('lists','Item lists &amp; prices')}</div>
     ${tml.busy?`<div class="tmlbusy">${twEsc(tml.busy)}</div>`:''}
-    ${body}`;
+    ${body}</div>`;
 }
 function tmlRunHtml(){
   if(!tmlCos().length) return `<div class="gaspanel"><h2>No companies yet</h2><div class="sub">Add a company and its surgeons first.</div><button class="btn primary" onclick="tmlCoNew();tmlTab('companies')">＋ Add a company</button></div>`;
